@@ -1,12 +1,13 @@
 from __future__ import print_function
 import os
 import socket
+import pathlib
 
 
 class Ensight:
 
     def __init__(self, filename='output', vector_var_names=None,
-                 scalar_var_names=None, comm=None, 
+                 scalar_var_names=None, comm=None,
                  viz_path=os.environ.get('VIZ_PATH', None)):
         """
            This API can be used to output Ensight CASE files from a scientific
@@ -32,7 +33,7 @@ class Ensight:
             rank = comm.MyPID()
 
             #Create a folder to house output files
-            directory = './ensight_files/'
+            directory = f'{pathlib.Path().absolute()}/ensight_files/'
             if not os.path.exists(directory):
                 os.makedirs(directory)
 

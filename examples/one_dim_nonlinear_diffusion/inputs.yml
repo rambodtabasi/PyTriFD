@@ -1,24 +1,24 @@
 'discretization':
     'horizon': 0.015 #For finite difference, should be >sqrt(max(delta) ** 2) & <delta
-    'tensor product grid': 
+    'tensor product grid':
         'bounds': [[0.0, 1.0]]
         'delta': [0.01]
 'degrees of freedom': ['rambod']
 'boundary conditions':
     - 'type': 'dirichlet'
       'degree of freedom': 'rambod'
-      'region': 
-          'box': [[-0.1, 0.05]]
+      'region':
+          'box': [[-0.1, 0.005]]
       'value': 0.0
     - 'type': 'dirichlet'
-      'region': 
-          'point-radius': 
+      'region':
+          'point-radius':
               'point': [1.0]
-              'radius': 0.05
+              'radius': 0.005
       'value': 1.0
 'material parameters':
     'k': 10.0
-'output': 
+'output':
     'path': '/Applications/ParaView-5.9.1.app/Contents/MacOS/paraview'
     'scalar':
       - 'processor_number'

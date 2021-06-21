@@ -7,7 +7,7 @@ import numpy as np
 import scipy.spatial
 import matplotlib.pyplot as plt
 
-from ensight import Ensight
+from .ensight import Ensight
 
 from PyTrilinos import Epetra
 from PyTrilinos import Teuchos
@@ -349,7 +349,6 @@ class FD(NOX.Epetra.Interface.Required,
 
         # Write the now balanced nodes to output file
         self.outfile.write_geometry_file_time_step(*self.my_nodes[:])
-        np.save(f'proc_number_{self.comm.MyPID()}.npy', self.my_nodes[:])
 
         # Write the processor number if requested
         if 'processor_number' in self.output_parameters:
@@ -362,7 +361,6 @@ class FD(NOX.Epetra.Interface.Required,
         # Import the balanced nodal data to overlap data
         self.my_nodes_overlap.Import(my_nodes, grid_overlap_importer,
                                      Epetra.Insert)
-        np.save(f'proc_number_overlap_{self.comm.MyPID()}.npy', self.my_nodes_overlap[:])
 
         maxes = np.max(self.my_nodes_overlap[:], axis=1)
         mins = np.min(self.my_nodes_overlap[:], axis=1)
