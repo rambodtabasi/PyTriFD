@@ -112,7 +112,6 @@ class FD(NOX.Epetra.Interface.Required,
         lids = np.arange(nodes.shape[1], dtype=np.int32)
 
         #Get lids
-        self.debug_print('point', point)
         lids = self.my_tree.query_ball_point(point, r=radius, eps=0.0, p=2)
 
         return self.nodal_dofs * np.array(lids, np.int32) + dof
@@ -375,7 +374,12 @@ class FD(NOX.Epetra.Interface.Required,
         self.my_field_overlap_indices_unsorted = \
             np.argsort(self.my_field_overlap_indices_sorted)
 
-        self.F_fill = np.zeros_like(self.my_field_overlap[:])
+        self.F_fill = (np.zeros_like(self.my_field_overlap[:])
+                       .reshape(self.nodal_dofs, *self.my_strides))
+
+        self.my_slice = [np.s_[1:-1] if i > 0 else np.s_[:]
+                               for i in range(self.problem_dimension + 1)]
+        self.debug_print(self.my_slice)
 
         return
 
@@ -387,7 +391,7 @@ class FD(NOX.Epetra.Interface.Required,
             field_overlap_importer = self.field_overlap_importer
 
             # Ensure residual placeholder is 0.0 everywhere
-            self.F_fill[:] = 0.0
+            self.F_fill *= 0.0
 
             # Import off-processor data
             self.my_field_overlap.Import(x, field_overlap_importer,
@@ -399,10 +403,13 @@ class FD(NOX.Epetra.Interface.Required,
                  .reshape(self.nodal_dofs, *self.my_strides))
 
             # return the (sorted) residual
-            self.F_fill[1:-1] = self.residual_operator(my_field_overlap_sorted)
+            self.F_fill[self.my_slice] = \
+                self.residual_operator(my_field_overlap_sorted)
+
 
             # Unsort and fill the actual residual
-            F[:] = self.F_fill[self.my_field_overlap_indices_unsorted][:num_owned]
+            F[:] = (self.F_fill.flatten()[
+                self.my_field_overlap_indices_unsorted][:num_owned])
 
             for bc_lids, bc_values in zip(self.dirichlet_bc_lids,
                                           self.dirichlet_bc_values):
