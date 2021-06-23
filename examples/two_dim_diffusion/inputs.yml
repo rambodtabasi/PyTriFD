@@ -1,23 +1,48 @@
 'discretization':
-    'horizon': 0.15 #For finite difference, should be >sqrt(max(delta) ** 2) & <delta
-    'tensor product grid': 
+    'horizon': 0.051 #For finite difference, should be >sqrt(max(delta) ** 2) & <delta
+    'tensor product grid':
         'bounds': [[0.0, 1.0], [0.0, 1.0]]
-        'delta': [0.1, 0.1]
-'degree of freedom map':
-    'u': 0
+        'delta': [0.05, 0.05]
+'degrees of freedom': ['u']
 'boundary conditions':
     - 'type': 'dirichlet'
       'degree of freedom': 'u'
-      'region': 
-          'box': [[-0.1, 1.1], [-0.05, 0.05]]
+      'region':
+          'box': [[0.99, 1.01], [-0.01, 1.01]]
+      'value': 0.0
+    - 'type': 'dirichlet'
+      'degree of freedom': 'u'
+      'region':
+          'box': [[-0.01, 0.01], [-0.01, 1.01]]
+      'value': 0.0
+    - 'type': 'dirichlet'
+      'degree of freedom': 'u'
+      'region':
+          'box': [[-0.01, 1.01], [-0.01, 0.01]]
       'value': 1.0
     - 'type': 'dirichlet'
-      'region': 
-          'box': [[-0.1, 1.1], [0.95, 1.05]]
+      'degree of freedom': 'u'
+      'region':
+          'box': [[-0.01, 1.01], [0.99, 1.01]]
       'value': 3.0
-'output': 
+'numerical':
+    'solver parameters':
+        'Printing':
+            'Output Information':
+                'Error': false
+                'Warning': false
+                'Outer Iteration': false
+                'Inner Iteration': false
+                'Details': false
+                'Outer Iteration StatusTest': false
+                'Linear Solver Details': false
+                'Test Details': false
+                'Stepper Iteration': false
+                'Stepper Details': false
+                'Stepper Parameters': false
+                'Debug': false
+'output':
     'path': '/Applications/ParaView-5.9.1.app/Contents/MacOS/paraview'
     'scalar':
       - 'processor_number'
     'frequency': 1
-

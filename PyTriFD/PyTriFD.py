@@ -5,7 +5,6 @@ import os
 
 import numpy as np
 import scipy.spatial
-import matplotlib.pyplot as plt
 
 from .ensight import Ensight
 
@@ -88,6 +87,18 @@ class FD(NOX.Epetra.Interface.Required,
         dofs = self.inputs.get('degrees of freedom', ['u'])
         self.dof_map = dict(zip(dofs, range(len(dofs))))
         self.nodal_dofs = len(self.dof_map)
+
+        self.numerical_parameters = self.inputs.get('numerical',
+                                                    {'number of steps': 1,
+                                                     'time step': 1.0,
+                                                     'solver parameters':
+                                                     {'Printing': {}}})
+        self.number_of_steps = (self.numerical_parameters
+                                .get('number of steps', 1))
+        self.time_step = self.numerical_parameters.get('time step', 1.0)
+        self.time = 0.0
+
+        self.solver_parameters = self.numerical_parameters['solver parameters']
 
         self.parse_additional_inputs()
         return
@@ -377,9 +388,8 @@ class FD(NOX.Epetra.Interface.Required,
         self.F_fill = (np.zeros_like(self.my_field_overlap[:])
                        .reshape(self.nodal_dofs, *self.my_strides))
 
-        self.my_slice = [np.s_[1:-1] if i > 0 else np.s_[:]
-                               for i in range(self.problem_dimension + 1)]
-        self.debug_print(self.my_slice)
+        self.my_slice = tuple([np.s_[1:-1] if i > 0 else np.s_[:]
+                               for i in range(self.problem_dimension + 1)])
 
         return
 
@@ -391,7 +401,7 @@ class FD(NOX.Epetra.Interface.Required,
             field_overlap_importer = self.field_overlap_importer
 
             # Ensure residual placeholder is 0.0 everywhere
-            self.F_fill *= 0.0
+            self.F_fill[:] = 0.0
 
             # Import off-processor data
             self.my_field_overlap.Import(x, field_overlap_importer,
@@ -411,11 +421,10 @@ class FD(NOX.Epetra.Interface.Required,
             F[:] = (self.F_fill.flatten()[
                 self.my_field_overlap_indices_unsorted][:num_owned])
 
+
             for bc_lids, bc_values in zip(self.dirichlet_bc_lids,
                                           self.dirichlet_bc_values):
                 F[bc_lids] = x[bc_lids] - bc_values
-
-            self.my_field[:] = x
 
             return True
 
@@ -428,26 +437,26 @@ class FD(NOX.Epetra.Interface.Required,
     def residual_operator(self, my_field_overlap_sorted):
         raise NotImplementedError()
 
-    def solve_one_step(self):
+
+    def solve_one_step(self, initial_guess):
 
         #Suppress 'Aztec status AZ_loss: loss of precision' messages
         self.comm.SetTracebackMode(0)
 
-        #Get the initial solution vector
-        initial_guess    = self.my_field
+        #Set the initial solution vector
         nox_initial_guess = NOX.Epetra.Vector(initial_guess,
                                               NOX.Epetra.Vector.CreateView)
 
         # Define the ParameterLists
         nonlinear_parameters = \
             NOX.Epetra.defaultNonlinearParameters(self.comm, 2)
-        print_parameters = nonlinear_parameters["Printing"]
-        linear_solver_parameters = nonlinear_parameters["Linear Solver"]
+        print_parameters = nonlinear_parameters['Printing']
+        print_parameters.update(self.solver_parameters['Printing'])
+        linear_solver_parameters = nonlinear_parameters['Linear Solver']
 
         # Define the Jacobian interface/operator
         matrix_free_operator = NOX.Epetra.MatrixFree(print_parameters, self,
                                                      nox_initial_guess)
-
         # Define the Preconditioner interface/operator
         preconditioner = \
             NOX.Epetra.FiniteDifferenceColoring(print_parameters, self,
@@ -456,22 +465,35 @@ class FD(NOX.Epetra.Interface.Required,
                                                 True)
 
         #Create and execute the solver
-        solver = NOX.Epetra.defaultSolver(initial_guess, self,
+        self.solver = NOX.Epetra.defaultSolver(initial_guess, self,
                                           matrix_free_operator,
                                           matrix_free_operator,
                                           preconditioner, preconditioner,
                                           nonlinear_parameters)
 
-        solve_status = solver.solve()
+        solve_status = self.solver.solve()
 
         if solve_status != NOX.StatusTest.Converged:
             if self.rank == 0:
                 print("Nonlinear solver failed to converge")
 
 
-    def get_final_solution(self):
+    def solve(self):
 
-        balanced_map = self.my_field.Map()
+        guess = self.my_field
+
+        for i in range(self.number_of_steps):
+            self.solve_one_step(guess)
+            guess = self.get_solution()
+            self.time += self.time_step
+
+    def get_solution(self):
+        return self.solver.getSolutionGroup().getX()
+
+
+    def get_solution_on_rank0(self):
+
+        balanced_map = self.get_solution().Map()
 
         if self.rank == 0:
             my_global_elements = balanced_map.NumGlobalElements()
@@ -483,6 +505,24 @@ class FD(NOX.Epetra.Interface.Required,
 
         importer = Epetra.Import(temp_map, balanced_map)
 
-        solution.Import(self.my_field, importer, Epetra.Insert)
+        solution.Import(self.get_solution(), importer, Epetra.Insert)
 
         return solution.ExtractCopy()
+
+    def get_nodes_on_rank0(self):
+
+        balanced_map = self.my_nodes.Map()
+
+        if self.rank == 0:
+            my_global_elements = balanced_map.NumGlobalElements()
+        else:
+            my_global_elements = 0
+
+        temp_map = Epetra.Map(-1, my_global_elements, 0, self.comm)
+        nodes = Epetra.MultiVector(temp_map, self.problem_dimension)
+
+        importer = Epetra.Import(temp_map, balanced_map)
+
+        nodes.Import(self.my_nodes, importer, Epetra.Insert)
+
+        return nodes.ExtractCopy()

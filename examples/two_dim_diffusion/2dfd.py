@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
-
 from PyTriFD import FD
+import matplotlib.pyplot as plt
 
 class TwoDimDiffusion(FD):
 
@@ -9,20 +9,42 @@ class TwoDimDiffusion(FD):
 
         u = my_field_overlap_sorted[0]
 
-        residual = ((u[:-2, :] + u[:, :-2] - 4*u[1:-1, 1:-1] + u[:, 2:] + u[2:, :]) /
-                    (self.deltas[0] ** 2.0))
+        dx2 = self.deltas[0] ** 2
+        dy2 = self.deltas[1] ** 2
 
-        return residual.flatten()
+        residual = (u[:-2, 1:-1]  / dx2 + u[1:-1, :-2] / dy2
+                    - 2 * u[1:-1, 1:-1] / dx2 - 2 * u[1:-1, 1:-1] / dy2
+                    + u[1:-1, 2:] / dy2 + u[2:, 1:-1] / dx2)
+
+
+        return residual
+
+    def plot_solution(self):
+
+        nodes = self.get_nodes_on_rank0()
+        u = self.get_solution_on_rank0()
+
+        bounds = \
+            self.inputs['discretization']['tensor product grid']['bounds']
+        delta = \
+            self.inputs['discretization']['tensor product grid']['delta']
+
+        xmin, xmax = bounds[0]
+        xnodes = int((xmax - xmin) / delta[0]) + 1
+
+
+        if self.rank == 0:
+            fig, ax = plt.subplots()
+            p = ax.contourf(nodes[0].reshape(-1,xnodes),
+                            nodes[1].reshape(-1,xnodes),
+                            u.reshape(-1,xnodes))
+            fig.colorbar(p)
+            plt.show()
 
 
 if __name__ == "__main__":
 
-    problem = OneDimNonlinearDiffusion('one_dim_nonlinear_diffusion_inputs.yml')
-    problem.solve_one_step()
-    u = problem.get_final_solution()
+    problem = TwoDimDiffusion('inputs.yml')
+    problem.solve()
+    problem.plot_solution()
 
-    if problem.comm.MyPID() == 0:
-        import matplotlib.pyplot as plt
-        fig, ax = plt.subplots()
-        ax.plot(u)
-        plt.show()

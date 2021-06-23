@@ -3,10 +3,10 @@
     'tensor product grid':
         'bounds': [[0.0, 1.0]]
         'delta': [0.01]
-'degrees of freedom': ['rambod']
+'degrees of freedom': ['u']
 'boundary conditions':
     - 'type': 'dirichlet'
-      'degree of freedom': 'rambod'
+      'degree of freedom': 'u'
       'region':
           'box': [[-0.1, 0.005]]
       'value': 0.0
@@ -23,6 +23,3 @@
     'scalar':
       - 'processor_number'
     'frequency': 1
-
-        #'bounds': [[0.5, 3.5], [0.5, 3.5]]
-        #'delta': [0.5, 0.5]
