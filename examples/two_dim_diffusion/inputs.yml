@@ -41,6 +41,9 @@
                 'Stepper Details': false
                 'Stepper Parameters': false
                 'Debug': false
+
+    'number of time steps': 1
+    'time step': 1.0
 'output':
     'path': '/Applications/ParaView-5.9.1.app/Contents/MacOS/paraview'
     'scalar':
