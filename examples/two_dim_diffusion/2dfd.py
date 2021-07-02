@@ -33,11 +33,13 @@ class TwoDimDiffusion(FD):
         xnodes = int((xmax - xmin) / delta[0]) + 1
 
 
+
         if self.rank == 0:
             fig, ax = plt.subplots()
             p = ax.contourf(nodes[0].reshape(-1,xnodes),
                             nodes[1].reshape(-1,xnodes),
                             u.reshape(-1,xnodes))
+            ax.set_aspect('equal')
             fig.colorbar(p)
             plt.show()
 

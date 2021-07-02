@@ -60,6 +60,8 @@ class FD(NOX.Epetra.Interface.Required,
         self.init_field_graph()
         # Initialize grid data structures
         self.init_grid_data()
+        # Compute "do nothing" boundary slices
+        self.compute_do_nothing_boundary_slices()
         # Get boundary condition info
         self.parse_boundary_conditions()
         # Finalize outputs
@@ -88,17 +90,19 @@ class FD(NOX.Epetra.Interface.Required,
         self.dof_map = dict(zip(dofs, range(len(dofs))))
         self.nodal_dofs = len(self.dof_map)
 
+        lbd = self.inputs.get('load balance direction', 'x')
+        self.load_balance_direction = {'x': 0, 'y': 1, 'z': 2}.get(lbd)
+
         self.numerical_parameters = self.inputs.get('numerical',
                                                     {'number of steps': 1,
-                                                     'time step': 1.0,
-                                                     'solver parameters':
-                                                     {'Printing': {}}})
+                                                     'time step': 1.0})
         self.number_of_steps = (self.numerical_parameters
                                 .get('number of steps', 1))
         self.time_step = self.numerical_parameters.get('time step', 1.0)
         self.time = 0.0
 
-        self.solver_parameters = self.numerical_parameters['solver parameters']
+        self.solver_parameters = \
+            self.numerical_parameters.get('solver parameters', {})
 
         self.parse_additional_inputs()
         return
@@ -127,6 +131,19 @@ class FD(NOX.Epetra.Interface.Required,
 
         return self.nodal_dofs * np.array(lids, np.int32) + dof
 
+    # def compute_boundary_normal(self, bc_lids):
+
+        # boundary_nodes = np.around(self.my_nodes_overlap[:].T[tuple(bc_lids)],
+                                   # decimals=10)
+
+        # if boundary_nodes.size != 0:
+            # is_same = (np.min(boundary_nodes, axis=0) ==
+                       # np.max(boundary_nodes, axis=0))
+            # same_value = boundary_nodes[0,is_same]
+            # return tuple(np.where(is_same, 1, 0))
+        # else:
+            # return None
+
 
     def parse_boundary_conditions(self):
 
@@ -136,6 +153,7 @@ class FD(NOX.Epetra.Interface.Required,
             dof = bc.get('degree of freedom', 0)
             if isinstance(dof, str):
                 dof = self.dof_map[dof]
+            # Find Dirichlet nodes
             if bc['type'] == 'dirichlet':
                 if 'box' in bc['region']:
                     (self.dirichlet_bc_lids
@@ -145,6 +163,7 @@ class FD(NOX.Epetra.Interface.Required,
                      .append(self.get_lids_from_point_radius(dof,
                         *list(bc['region']['point-radius'].values()))))
                 self.dirichlet_bc_values.append(bc['value'])
+
 
     def init_output(self):
         """Initial Ensight file for simulation results"""
@@ -220,7 +239,7 @@ class FD(NOX.Epetra.Interface.Required,
     def init_neighborhood_graph(self):
         """
            Creates the neighborhood ``connectivity'' graph.  This is used to
-           load balanced the problem and initialize Jacobian data.
+           initialize Jacobian data.
         """
 
         #Create the standard unbalanced map to instantiate the Epetra.CrsGraph
@@ -257,12 +276,12 @@ class FD(NOX.Epetra.Interface.Required,
         if not self.verbose:
             parameter_sublist.set("DEBUG_LEVEL", "0")
         # Create a partitioner to load balance the graph
-        partitioner = Isorropia.Epetra.Partitioner(self.my_nodes,
-                                                   parameter_list)
+        partitioner = Isorropia.Epetra.Partitioner(self.my_nodes[
+            self.load_balance_direction], parameter_list)
         # And a redistributer
         redistributer = Isorropia.Epetra.Redistributor(partitioner)
 
-        # Redistribute vector and store the map
+        # Redistribute graph and store the map
         self.neighborhood_graph = \
             redistributer.redistribute(self.neighborhood_graph)
 
@@ -270,26 +289,27 @@ class FD(NOX.Epetra.Interface.Required,
 
         return
 
+
     def init_field_graph(self):
 
         nodal_dofs = self.nodal_dofs
 
         my_global_indices = self.balanced_map.MyGlobalElements()
 
-        field_global_indices = np.empty(nodal_dofs *
-                                        my_global_indices.shape[0],
-                                        dtype=np.int32)
+        my_field_global_indices = np.empty(nodal_dofs *
+                                           my_global_indices.shape[0],
+                                           dtype=np.int32)
 
         for i in range(nodal_dofs):
-            field_global_indices[i::nodal_dofs] = (nodal_dofs *
-                                                   my_global_indices) + i
+            my_field_global_indices[i::nodal_dofs] = (nodal_dofs *
+                                                      my_global_indices) + i
 
-        self.number_of_field_variables =  (nodal_dofs *
-                                           self.global_number_of_nodes)
+        number_of_field_variables =  (nodal_dofs *
+                                      self.global_number_of_nodes)
 
         # create Epetra Map based on node degrees of Freedom
-        self.balanced_field_map = Epetra.Map(self.number_of_field_variables,
-                                             field_global_indices.tolist(),
+        self.balanced_field_map = Epetra.Map(number_of_field_variables,
+                                             my_field_global_indices.tolist(),
                                              0, self.comm)
 
         # Instantiate the corresponding graph
@@ -324,13 +344,14 @@ class FD(NOX.Epetra.Interface.Required,
         """Create data structures needed for doing computations"""
 
         # Create some local (to function) convenience variables
+        nodal_dofs = self.nodal_dofs
+
         unbalanced_map = self.my_nodes.Map()
         balanced_map = self.balanced_map
         field_balanced_map = self.balanced_field_map
 
         overlap_map = self.neighborhood_graph.ColMap()
         field_overlap_map = self.balanced_field_graph.ColMap()
-
 
         # Create the balanced vectors
         my_nodes = Epetra.MultiVector(balanced_map,
@@ -342,11 +363,9 @@ class FD(NOX.Epetra.Interface.Required,
                                                    self.problem_dimension)
         self.my_field_overlap = Epetra.Vector(field_overlap_map)
 
-
         # Create/get importers
         grid_importer = Epetra.Import(balanced_map, unbalanced_map)
         grid_overlap_importer = Epetra.Import(overlap_map, balanced_map)
-
         self.field_overlap_importer = Epetra.Import(field_overlap_map,
                                                     field_balanced_map)
 
@@ -380,10 +399,18 @@ class FD(NOX.Epetra.Interface.Required,
         overlap_indices = overlap_map.MyGlobalElements()
         field_overlap_indices = field_overlap_map.MyGlobalElements()
 
-        self.my_overlap_indices_sorted = np.argsort(overlap_indices)
-        self.my_field_overlap_indices_sorted = np.argsort(field_overlap_indices)
-        self.my_field_overlap_indices_unsorted = \
-            np.argsort(self.my_field_overlap_indices_sorted)
+        #Allocate point indices array
+        self.my_field_overlap_points_sorted = \
+            np.empty(nodal_dofs * field_overlap_indices[:].shape[0],
+                     dtype=np.int32)
+
+        #Convert nodal indices to field point indices
+        for i in range(nodal_dofs):
+            self.my_field_overlap_points_sorted[i::nodal_dofs] = \
+                nodal_dofs * np.argsort(field_overlap_indices)
+
+        self.my_field_overlap_points_unsorted = \
+            np.argsort(self.my_field_overlap_points_sorted)
 
         self.F_fill = (np.zeros_like(self.my_field_overlap[:])
                        .reshape(self.nodal_dofs, *self.my_strides))
@@ -392,6 +419,28 @@ class FD(NOX.Epetra.Interface.Required,
                                for i in range(self.problem_dimension + 1)])
 
         return
+
+    def compute_do_nothing_boundary_slices(self):
+        self.s0 = []
+        self.s1 = []
+        self.s2 = []
+        self.sm1 = []
+        self.sm2 = []
+        self.sm3 = []
+        for i in range(self.problem_dimension):
+            self.s0.append(tuple([np.s_[:] if j != i else 0 for j in
+                             range(self.problem_dimension)]))
+            self.s1.append(tuple([np.s_[:] if j != i else 1 for j in
+                             range(self.problem_dimension)]))
+            self.s2.append(tuple([np.s_[:] if j != i else 2 for j in
+                             range(self.problem_dimension)]))
+            self.sm1.append(tuple([np.s_[:] if j != i else -1 for j in
+                              range(self.problem_dimension)]))
+            self.sm2.append(tuple([np.s_[:] if j != i else -2 for j in
+                              range(self.problem_dimension)]))
+            self.sm3.append(tuple([np.s_[:] if j != i else -3 for j in
+                              range(self.problem_dimension)]))
+
 
     def computeF(self, x, F, flag):
         """Implements the residual calculation as required by NOX.
@@ -409,19 +458,31 @@ class FD(NOX.Epetra.Interface.Required,
 
             # Sort data for FD calcs
             my_field_overlap_sorted = \
-                (self.my_field_overlap[self.my_field_overlap_indices_sorted]
+                (self.my_field_overlap[self.my_field_overlap_points_sorted]
                  .reshape(self.nodal_dofs, *self.my_strides))
 
             # return the (sorted) residual
             self.F_fill[self.my_slice] = \
                 self.residual_operator(my_field_overlap_sorted)
 
+            # Interpolate interior values to the boundaries,
+            # i.e. "do nothing BCs"
+            s0, s1, s2, sm1, sm2, sm3 = (self.s0, self.s1, self.s2,
+                                         self.sm1, self.sm2, self.sm3)
+            for i, dof in enumerate(my_field_overlap_sorted):
+                for j in range(self.problem_dimension):
+                    # top/left/front
+                    self.F_fill[i][s0[j]] = dof[s0[j]] - (2 * dof[s1[j]] -
+                                                          dof[s2[j]])
+                    # bottom/right/back
+                    self.F_fill[i][sm1[j]] = dof[sm1[j]] - (2 * dof[sm2[j]] -
+                                                            dof[sm3[j]])
 
             # Unsort and fill the actual residual
             F[:] = (self.F_fill.flatten()[
-                self.my_field_overlap_indices_unsorted][:num_owned])
+                self.my_field_overlap_points_unsorted][:num_owned])
 
-
+            # Apply Dirichlet BCs
             for bc_lids, bc_values in zip(self.dirichlet_bc_lids,
                                           self.dirichlet_bc_values):
                 F[bc_lids] = x[bc_lids] - bc_values
@@ -451,7 +512,8 @@ class FD(NOX.Epetra.Interface.Required,
         nonlinear_parameters = \
             NOX.Epetra.defaultNonlinearParameters(self.comm, 2)
         print_parameters = nonlinear_parameters['Printing']
-        print_parameters.update(self.solver_parameters['Printing'])
+        if 'Printing' in self.solver_parameters:
+            print_parameters.update(self.solver_parameters['Printing'])
         linear_solver_parameters = nonlinear_parameters['Linear Solver']
 
         # Define the Jacobian interface/operator
