@@ -399,21 +399,15 @@ class FD(NOX.Epetra.Interface.Required,
         overlap_indices = overlap_map.MyGlobalElements()
         field_overlap_indices = field_overlap_map.MyGlobalElements()
 
-        #Allocate point indices array
-        self.my_field_overlap_points_sorted = \
-            np.empty(nodal_dofs * field_overlap_indices[:].shape[0],
-                     dtype=np.int32)
+        # Get the sorted local indices
+        self.my_field_overlap_indices_sorted = np.argsort(field_overlap_indices)
 
-        #Convert nodal indices to field point indices
-        for i in range(nodal_dofs):
-            self.my_field_overlap_points_sorted[i::nodal_dofs] = \
-                nodal_dofs * np.argsort(field_overlap_indices)
-
-        self.my_field_overlap_points_unsorted = \
-            np.argsort(self.my_field_overlap_points_sorted)
+        # Get the unsorted local indices
+        self.my_field_overlap_indices_unsorted = \
+            np.argsort(self.my_field_overlap_indices_sorted)
 
         self.F_fill = (np.zeros_like(self.my_field_overlap[:])
-                       .reshape(self.nodal_dofs, *self.my_strides))
+                       .reshape(-1, self.nodal_dofs).T.reshape(-1, *self.my_strides))
 
         self.my_slice = tuple([np.s_[1:-1] if i > 0 else np.s_[:]
                                for i in range(self.problem_dimension + 1)])
@@ -458,8 +452,8 @@ class FD(NOX.Epetra.Interface.Required,
 
             # Sort data for FD calcs
             my_field_overlap_sorted = \
-                (self.my_field_overlap[self.my_field_overlap_points_sorted]
-                 .reshape(self.nodal_dofs, *self.my_strides))
+                (self.my_field_overlap[self.my_field_overlap_indices_sorted]
+                 .reshape(-1, self.nodal_dofs).T.reshape(-1, *self.my_strides))
 
             # return the (sorted) residual
             self.F_fill[self.my_slice] = \
@@ -480,7 +474,7 @@ class FD(NOX.Epetra.Interface.Required,
 
             # Unsort and fill the actual residual
             F[:] = (self.F_fill.flatten()[
-                self.my_field_overlap_points_unsorted][:num_owned])
+                self.my_field_overlap_indices_unsorted][:num_owned])
 
             # Apply Dirichlet BCs
             for bc_lids, bc_values in zip(self.dirichlet_bc_lids,

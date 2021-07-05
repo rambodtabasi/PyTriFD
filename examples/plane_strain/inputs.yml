@@ -1,18 +1,18 @@
 'discretization':
     'tensor product grid':
-        'bounds': [[0.0, 2.0], [0.0, 1.0]]
-        'delta': [0.1, 0.1]
+        'bounds': [[0.0, 1.0], [0.0, 1.0]]
+        'delta': [0.25, 0.25]
 'material parameters':
     'nu': 0.33
     'E': 200000000.0
 'degrees of freedom': ['ux', 'uy']
 'boundary conditions':
       #Right
-    - 'type': 'neumann'
+    - 'type': 'dirichlet'
       'degree of freedom': 'ux'
       'region':
-          'box': [[0.99, 1.01], [-0.01, 1.01]]
-      'value': 100.0
+          'box': [[0.99, 1.01], [-0.01, 0.01]]
+      'value': 1.0
       #Left
     - 'type': 'dirichlet'
       'degree of freedom': 'ux'
