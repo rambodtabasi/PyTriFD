@@ -26,21 +26,24 @@ class TwoDimStokes(FD):
         dx = self.deltas[0]
         dy = self.deltas[1]
 
-        strain_xx = (ux[1:, 1:] - ux[1:, :-1]) / dx
-        strain_yy = (uy[1:, 1:] - uy[:-1, 1:]) / dy
-        strain_xy = 0.5 * ((ux[1:, 1:] - ux[:-1, 1:]) / dy +
-                           (uy[1:, 1:] - uy[1:, :-1]) / dx)
+        ux_xx = (ux[1:-1, :-2] - 2 * ux[1:-1, 1:-1] + ux[1:-1, 2:]) / dx / dx
+        uy_xx = (uy[1:-1, :-2] - 2 * uy[1:-1, 1:-1] + uy[1:-1, 2:]) / dx / dx
+        uy_yy = (uy[:-2, 1:-1] - 2 * uy[1:-1, 1:-1] + uy[2:, 1:-1]) / dy / dy
+        ux_yy = (ux[:-2, 1:-1] - 2 * ux[1:-1, 1:-1] + ux[2:, 1:-1]) / dy / dy
 
-        stress_xx = self.lambda_plus_2G * strain_xx + self.lambda_ * strain_yy
-        stress_yy = self.lambda_plus_2G * strain_yy + self.lambda_ * strain_xx
-        stress_xy = self.E / (1 + self.nu) * strain_xy
+        ux_xy = ((ux[2:, 2:] - ux[:-2, 2:] - ux[2:, :-2] + ux[:-2, :-2]) /
+                 dx / dy / 4.0)
+        uy_xy = ((uy[2:, 2:] - uy[:-2, 2:] - uy[2:, :-2] + uy[:-2, :-2]) /
+                 dx / dy / 4.0)
 
-        residual1 = ((stress_xx[:-1, :-1] - stress_xx[:-1, 1:]) / dx +
-                     (stress_xy[:-1, :-1] - stress_xy[1:, :-1]) / dy)
+        sxx_x = self.lambda_plus_2G * ux_xx + self.lambda_ * uy_xy
+        syy_y = self.lambda_plus_2G * uy_yy + self.lambda_ * ux_xy
 
-        residual2 = ((stress_xy[:-1, :-1] - stress_xy[:-1, 1:]) / dx +
-                     (stress_yy[:-1, :-1] - stress_yy[1:, :-1]) / dy)
+        sxy_y = self.E / (1.0 + self.nu) / 2.0 * (ux_yy + uy_xy)
+        sxy_x = self.E / (1.0 + self.nu) / 2.0 * (ux_xy + uy_yy)
 
+        residual1 = sxx_x + sxy_y
+        residual2 = sxy_x + syy_y
 
         return residual1, residual2
 

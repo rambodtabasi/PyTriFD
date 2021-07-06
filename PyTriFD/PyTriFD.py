@@ -150,19 +150,21 @@ class FD(NOX.Epetra.Interface.Required,
         self.dirichlet_bc_lids = []
         self.dirichlet_bc_values = []
         for bc in self.boundary_conditions:
-            dof = bc.get('degree of freedom', 0)
-            if isinstance(dof, str):
-                dof = self.dof_map[dof]
-            # Find Dirichlet nodes
-            if bc['type'] == 'dirichlet':
-                if 'box' in bc['region']:
-                    (self.dirichlet_bc_lids
-                     .append(self.get_lids_from_box(dof, bc['region']['box'])))
-                elif 'point-radius' in bc['region']:
-                    (self.dirichlet_bc_lids
-                     .append(self.get_lids_from_point_radius(dof,
-                        *list(bc['region']['point-radius'].values()))))
-                self.dirichlet_bc_values.append(bc['value'])
+            dofs = bc.get('degrees of freedom', [0])
+            for dof in dofs:
+                if isinstance(dof, str):
+                    dof = self.dof_map[dof]
+                # Find Dirichlet nodes
+                if bc['type'] == 'dirichlet':
+                    if 'box' in bc['region']:
+                        (self.dirichlet_bc_lids
+                         .append(self.get_lids_from_box(dof,
+                                                        bc['region']['box'])))
+                    elif 'point-radius' in bc['region']:
+                        (self.dirichlet_bc_lids
+                         .append(self.get_lids_from_point_radius(dof,
+                            *list(bc['region']['point-radius'].values()))))
+                    self.dirichlet_bc_values.append(bc['value'])
 
 
     def init_output(self):
@@ -471,7 +473,6 @@ class FD(NOX.Epetra.Interface.Required,
                     # bottom/right/back
                     self.F_fill[i][sm1[j]] = dof[sm1[j]] - (2 * dof[sm2[j]] -
                                                             dof[sm3[j]])
-
             # Unsort and fill the actual residual
             F[:] = (self.F_fill.flatten()[
                 self.my_field_overlap_indices_unsorted][:num_owned])
@@ -501,6 +502,11 @@ class FD(NOX.Epetra.Interface.Required,
         #Set the initial solution vector
         nox_initial_guess = NOX.Epetra.Vector(initial_guess,
                                               NOX.Epetra.Vector.CreateView)
+
+        # Set the Dirichlet boundary values in the initial guess
+        # for bc_lids, bc_values in zip(self.dirichlet_bc_lids,
+                                      # self.dirichlet_bc_values):
+            # nox_initial_guess[bc_lids] = bc_values
 
         # Define the ParameterLists
         nonlinear_parameters = \

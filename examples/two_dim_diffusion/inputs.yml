@@ -9,19 +9,19 @@
     # Right "do nothing"
     # Left
     - 'type': 'dirichlet'
-      'degree of freedom': 'u'
+      'degrees of freedom': 'u'
       'region':
           'box': [[-0.01, 0.01], [-0.01, 1.01]]
       'value': 100.0
     # Bottom
     - 'type': 'dirichlet'
-      'degree of freedom': 'u'
+      'degrees of freedom': 'u'
       'region':
           'box': [[-0.01, 2.01], [-0.01, 0.01]]
       'value': 0.0
     # Top
     - 'type': 'dirichlet'
-      'degree of freedom': 'u'
+      'degrees of freedom': 'u'
       'region':
           'box': [[-0.01, 2.01], [0.99, 1.01]]
       'value': 0.0
