@@ -1,9 +1,9 @@
 'discretization':
-    'horizon': 0.051 #For finite difference, should be >sqrt(max(delta) ** 2) & <delta
+    'horizon': 0.101 #For finite difference, should be >sqrt(max(delta) ** 2) & <delta
     'tensor product grid':
         'bounds': [[0.0, 2.0], [0.0, 1.0]]
-        'delta': [0.05, 0.05]
-'degrees of freedom': ['u']
+        'delta': [0.1, 0.1]
+'degrees of freedom': ['u','v']
 'load balance direction': 'x'
 'boundary conditions':
     # Right "do nothing"
@@ -12,16 +12,21 @@
       'degrees of freedom': 'u'
       'region':
           'box': [[-0.01, 0.01], [-0.01, 1.01]]
-      'value': 100.0
+      'value': 50.0
+    - 'type': 'dirichlet'
+      'degrees of freedom': 'v'
+      'region':
+          'box': [[-0.01, 0.01], [-0.01, 1.01]]
+      'value': 30.0
     # Bottom
     - 'type': 'dirichlet'
-      'degrees of freedom': 'u'
+      'degrees of freedom': ['u','v']
       'region':
           'box': [[-0.01, 2.01], [-0.01, 0.01]]
       'value': 0.0
     # Top
     - 'type': 'dirichlet'
-      'degrees of freedom': 'u'
+      'degrees of freedom': ['u','v']
       'region':
           'box': [[-0.01, 2.01], [0.99, 1.01]]
       'value': 0.0
@@ -41,8 +46,8 @@
                 'Stepper Details': false
                 'Stepper Parameters': false
                 'Debug': false
-    'number of time steps': 1
-    'time step': 1.0
+    'number of steps': 3
+    'time step': 0.001
 'output':
     'path': '/Applications/ParaView-5.9.1.app/Contents/MacOS/paraview'
     'scalar':

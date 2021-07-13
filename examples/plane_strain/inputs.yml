@@ -1,7 +1,7 @@
 'discretization':
     'tensor product grid':
         'bounds': [[0.0, 1.0], [0.0, 1.0]]
-        'delta': [0.25, 0.25]
+        'delta': [0.1, 0.1]
 'material parameters':
     'nu': 0.33
     'E': 200000000.0

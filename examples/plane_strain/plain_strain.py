@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 from PyTriFD import FD
 import matplotlib.pyplot as plt
+import numpy as np
 
 class TwoDimStokes(FD):
 
@@ -25,6 +26,8 @@ class TwoDimStokes(FD):
 
         dx = self.deltas[0]
         dy = self.deltas[1]
+        dx2 = dx ** 2
+        dy2 = dy ** 2
 
         ux_xx = (ux[1:-1, :-2] - 2 * ux[1:-1, 1:-1] + ux[1:-1, 2:]) / dx / dx
         uy_xx = (uy[1:-1, :-2] - 2 * uy[1:-1, 1:-1] + uy[1:-1, 2:]) / dx / dx
@@ -41,10 +44,18 @@ class TwoDimStokes(FD):
 
         sxy_y = self.E / (1.0 + self.nu) / 2.0 * (ux_yy + uy_xy)
         sxy_x = self.E / (1.0 + self.nu) / 2.0 * (ux_xy + uy_yy)
+        residual1 = (ux[:-2, 1:-1]  / dx2 + ux[1:-1, :-2] / dy2
+		 - 2 * ux[1:-1, 1:-1] / dx2 - 2 * ux[1:-1, 1:-1] / dy2
+		 + ux[1:-1, 2:] / dy2 + ux[2:, 1:-1] / dx2)
+        residual2 = (uy[:-2, 1:-1]  / dx2 + uy[1:-1, :-2] / dy2
+		 - 2 * uy[1:-1, 1:-1] / dx2 - 2 * uy[1:-1, 1:-1] / dy2
+		 + uy[1:-1, 2:] / dy2 + uy[2:, 1:-1] / dx2)
 
-        residual1 = sxx_x + sxy_y
-        residual2 = sxy_x + syy_y
 
+        #residual1 = sxx_x + sxy_y
+        #residual2 = sxy_x + syy_y
+        #size = sxy_x.shape
+        #residual2 = np.zeros(shape=(size[0],size[1]))
         return residual1, residual2
 
 

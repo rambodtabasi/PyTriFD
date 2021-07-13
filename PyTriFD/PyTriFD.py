@@ -4,6 +4,7 @@ import yaml
 import os
 
 import numpy as np
+import numpy.ma as ma
 import scipy.spatial
 
 from .ensight import Ensight
@@ -55,7 +56,7 @@ class FD(NOX.Epetra.Interface.Required,
         # Load balance
         self.load_balance()
         # Initialize the output files
-        self.init_output()
+        #self.init_output()
         # Initialize the field graph
         self.init_field_graph()
         # Initialize grid data structures
@@ -65,7 +66,7 @@ class FD(NOX.Epetra.Interface.Required,
         # Get boundary condition info
         self.parse_boundary_conditions()
         # Finalize outputs
-        self.finalize_output()
+        #self.finalize_output()
 
         return
 
@@ -288,6 +289,8 @@ class FD(NOX.Epetra.Interface.Required,
             redistributer.redistribute(self.neighborhood_graph)
 
         self.balanced_map = self.neighborhood_graph.Map()
+        #Rambod
+        #self.num_owned = self.neighborhood_graph.NumMyRows()
 
         return
 
@@ -337,6 +340,7 @@ class FD(NOX.Epetra.Interface.Required,
 
         # complete fill of balanced graph
         self.balanced_field_graph.FillComplete()
+
         self.num_owned = self.balanced_field_graph.NumMyRows()
 
         return
@@ -359,6 +363,9 @@ class FD(NOX.Epetra.Interface.Required,
         my_nodes = Epetra.MultiVector(balanced_map,
                                       self.problem_dimension)
         self.my_field = Epetra.Vector(field_balanced_map)
+        self.solution_n = self.my_field
+        #Rambod
+        self.my_field_n = Epetra.Vector(field_balanced_map)
 
         # Create the overlap vectors
         self.my_nodes_overlap = Epetra.MultiVector(overlap_map,
@@ -379,14 +386,14 @@ class FD(NOX.Epetra.Interface.Required,
         self.my_tree = scipy.spatial.cKDTree(self.my_nodes[:].T)
 
         # Write the now balanced nodes to output file
-        self.outfile.write_geometry_file_time_step(*self.my_nodes[:])
+        #self.outfile.write_geometry_file_time_step(*self.my_nodes[:])
 
         # Write the processor number if requested
-        if 'processor_number' in self.output_parameters:
-            proc_list = np.ones(self.my_nodes[:].T.shape[0],
-                                dtype=np.int32) * self.comm.MyPID()
-            self.outfile.write_scalar_variable_time_step('processor_number',
-                                                         proc_list, 0.0)
+        #if 'processor_number' in self.output_parameters:
+        #    proc_list = np.ones(self.my_nodes[:].T.shape[0],
+        #                        dtype=np.int32) * self.comm.MyPID()
+        #    self.outfile.write_scalar_variable_time_step('processor_number',
+        #                                                 proc_list, 0.0)
 
 
         # Import the balanced nodal data to overlap data
@@ -407,12 +414,52 @@ class FD(NOX.Epetra.Interface.Required,
         # Get the unsorted local indices
         self.my_field_overlap_indices_unsorted = \
             np.argsort(self.my_field_overlap_indices_sorted)
-
-        self.F_fill = (np.zeros_like(self.my_field_overlap[:])
-                       .reshape(-1, self.nodal_dofs).T.reshape(-1, *self.my_strides))
+        self.F_fill = (np.zeros_like(self.my_field_overlap[:])) #.reshape(-1, self.nodal_dofs).T.reshape(-1, *self.my_strides))
 
         self.my_slice = tuple([np.s_[1:-1] if i > 0 else np.s_[:]
                                for i in range(self.problem_dimension + 1)])
+
+        ## Rambod
+        ### need to extract the number of on processor nodes based on neighborhoods
+        self.num_owned_neighb = self.neighborhood_graph.NumMyRows()
+        ### additional of ref-pos_x and y to finite diff code
+        my_x_overlap = self.my_nodes_overlap[0,:]
+        my_y_overlap = self.my_nodes_overlap[1,:]
+
+        self.my_row_max_entries = self.neighborhood_graph.MaxNumIndices() - 1
+        # Query the number of rows in the neighborhood graph on processor
+        # Allocate the neighborhood array, fill with -1's as placeholders
+        my_neighbors_temp = np.ones((self.num_owned_neighb, self.my_row_max_entries),
+                                     dtype=np.int32) * -1
+        # Extract the local node ids from the graph (except on the diagonal)
+        # and fill neighborhood array
+        ### need to extract the number of on processor nodes based on neighborhoods
+        self.num_owned_neighb = self.neighborhood_graph.NumMyRows()
+        for rid in range(self.num_owned_neighb):
+            # Extract the row and remove the diagonal entry
+            row = np.setdiff1d(self.neighborhood_graph.ExtractMyRowCopy(rid),
+                               [rid], True)
+            # Compute the length of this row
+            row_length = len(row)
+            # Fill the neighborhood array
+            my_neighbors_temp[rid, :row_length] = row
+
+        self.my_neighbors = ma.masked_equal(my_neighbors_temp, -1)
+        self.my_neighbors.harden_mask()
+        self.my_ref_pos_state_x = ma.masked_array(
+         my_x_overlap[[self.my_neighbors]] -
+         my_x_overlap[:self.num_owned_neighb, None],
+         mask=self.my_neighbors.mask)
+        self.my_ref_pos_state_y = ma.masked_array(
+         my_y_overlap[[self.my_neighbors]] -
+         my_y_overlap[:self.num_owned_neighb, None],
+         mask=self.my_neighbors.mask)
+
+        self.my_ref_mag_state = (self.my_ref_pos_state_x * self.my_ref_pos_state_x + self.my_ref_pos_state_y *\
+                self.my_ref_pos_state_y) ** 0.5
+        self.ref_mag_state_invert = (self.my_ref_mag_state ** ( 2.0)) ** -1.0
+
+        self.my_volumes = np.ones_like(my_x_overlap, dtype=np.double) * self.deltas[0] * self.deltas[1]
 
         return
 
@@ -442,30 +489,24 @@ class FD(NOX.Epetra.Interface.Required,
         """Implements the residual calculation as required by NOX.
         """
         try:
+            #print ("entered computeF")
             num_owned = self.num_owned
             field_overlap_importer = self.field_overlap_importer
 
             # Ensure residual placeholder is 0.0 everywhere
             self.F_fill[:] = 0.0
+            #print ("0")
+            #print (self.F_fill.shape)
 
             # Import off-processor data
             self.my_field_overlap.Import(x, field_overlap_importer,
                                          Epetra.Insert)
-
-            # Sort data for FD calcs
-            my_field_overlap_sorted = \
-                (self.my_field_overlap[self.my_field_overlap_indices_sorted]
-                 .reshape(-1, self.nodal_dofs).T.reshape(-1, *self.my_strides))
-
-            # return the (sorted) residual
-            self.F_fill[self.my_slice] = \
-                self.residual_operator(my_field_overlap_sorted)
-
+            """ Do nothing BC
             # Interpolate interior values to the boundaries,
             # i.e. "do nothing BCs"
             s0, s1, s2, sm1, sm2, sm3 = (self.s0, self.s1, self.s2,
                                          self.sm1, self.sm2, self.sm3)
-            for i, dof in enumerate(my_field_overlap_sorted):
+            for i, dof in enumerate(self.my_field_overlap):
                 for j in range(self.problem_dimension):
                     # top/left/front
                     self.F_fill[i][s0[j]] = dof[s0[j]] - (2 * dof[s1[j]] -
@@ -473,10 +514,16 @@ class FD(NOX.Epetra.Interface.Required,
                     # bottom/right/back
                     self.F_fill[i][sm1[j]] = dof[sm1[j]] - (2 * dof[sm2[j]] -
                                                             dof[sm3[j]])
-            # Unsort and fill the actual residual
-            F[:] = (self.F_fill.flatten()[
-                self.my_field_overlap_indices_unsorted][:num_owned])
 
+            """
+            #print ("1")
+            #Rambod
+            self.F_fill[:num_owned] = self.residual_operator(self.my_field_overlap)
+            #print ("2")
+
+            F[:] = self.F_fill[:self.num_owned] #(self.F_fill.flatten()[:num_owned])
+
+            #print ("3")
             # Apply Dirichlet BCs
             for bc_lids, bc_values in zip(self.dirichlet_bc_lids,
                                           self.dirichlet_bc_values):
@@ -545,8 +592,11 @@ class FD(NOX.Epetra.Interface.Required,
         guess = self.my_field
 
         for i in range(self.number_of_steps):
+            print (i)
             self.solve_one_step(guess)
             guess = self.get_solution()
+            #guess = 0.8 * guess
+            self.solution_n = guess
             self.time += self.time_step
 
     def get_solution(self):
