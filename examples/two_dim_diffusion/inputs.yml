@@ -3,32 +3,38 @@
     'tensor product grid':
         'bounds': [[0.0, 2.0], [0.0, 1.0]]
         'delta': [0.1, 0.1]
-'degrees of freedom': ['u','v']
+'degrees of freedom': ['p','s']
 'load balance direction': 'x'
 'boundary conditions':
     # Right "do nothing"
     # Left
     - 'type': 'dirichlet'
-      'degrees of freedom': 'u'
+      'degrees of freedom': 'p'
       'region':
           'box': [[-0.01, 0.01], [-0.01, 1.01]]
-      'value': 50.0
+      'value': 1000.0
     - 'type': 'dirichlet'
-      'degrees of freedom': 'v'
+      'degrees of freedom': 's'
       'region':
           'box': [[-0.01, 0.01], [-0.01, 1.01]]
-      'value': 30.0
+      'value': 1.0
     # Bottom
     - 'type': 'dirichlet'
-      'degrees of freedom': ['u','v']
+      'degrees of freedom': ['p','s']
       'region':
           'box': [[-0.01, 2.01], [-0.01, 0.01]]
       'value': 0.0
     # Top
     - 'type': 'dirichlet'
-      'degrees of freedom': ['u','v']
+      'degrees of freedom': ['p','s']
       'region':
           'box': [[-0.01, 2.01], [0.99, 1.01]]
+      'value': 0.0
+    # Right
+    - 'type': 'dirichlet'
+      'degrees of freedom': 'p'
+      'region':
+          'box': [[1.99, 2.01], [-0.01, 1.01]]
       'value': 0.0
 'numerical':
     'solver parameters':
@@ -46,8 +52,8 @@
                 'Stepper Details': false
                 'Stepper Parameters': false
                 'Debug': false
-    'number of steps': 3
-    'time step': 0.001
+    'number of steps': 20
+    'time step': 0.1
 'output':
     'path': '/Applications/ParaView-5.9.1.app/Contents/MacOS/paraview'
     'scalar':
