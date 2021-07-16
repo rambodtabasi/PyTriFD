@@ -501,6 +501,11 @@ class FD(NOX.Epetra.Interface.Required,
             # Import off-processor data
             self.my_field_overlap.Import(x, field_overlap_importer,
                                          Epetra.Insert)
+            #print ("1")
+            #Rambod
+            self.F_fill[:num_owned] = self.residual_operator(self.my_field_overlap)
+            #print ("2")
+
             """ Do nothing BC
             # Interpolate interior values to the boundaries,
             # i.e. "do nothing BCs"
@@ -516,10 +521,6 @@ class FD(NOX.Epetra.Interface.Required,
                                                             dof[sm3[j]])
 
             """
-            #print ("1")
-            #Rambod
-            self.F_fill[:num_owned] = self.residual_operator(self.my_field_overlap)
-            #print ("2")
 
             F[:] = self.F_fill[:self.num_owned] #(self.F_fill.flatten()[:num_owned])
 
@@ -537,7 +538,7 @@ class FD(NOX.Epetra.Interface.Required,
 
             return False
 
-    def residual_operator(self, my_field_overlap_sorted):
+    def residual_operator(self, my_field_overlap):
         raise NotImplementedError()
 
 
@@ -578,7 +579,7 @@ class FD(NOX.Epetra.Interface.Required,
                                           matrix_free_operator,
                                           matrix_free_operator,
                                           preconditioner, preconditioner,
-                                          nonlinear_parameters)
+                                          nonlinear_parameters, maxIters = 20, wAbsTol=None, wRelTol=None, updateTol= False, absTol = 2.0e-4, relTol = 2.0e-6)
 
         solve_status = self.solver.solve()
 
@@ -591,13 +592,46 @@ class FD(NOX.Epetra.Interface.Required,
 
         guess = self.my_field
 
+        self.gamma_s = 12.0 /(np.pi *(self.horizon**2.0))
+        self.gamma_p = 6.0 /(np.pi *(self.horizon**2.0))
+        self.omega = np.ones_like(self.my_ref_mag_state) - (self.my_ref_mag_state/self.horizon)
+
+
+        direction = np.zeros_like(self.my_ref_pos_state_x)
+        self.up_wind_indicator =  direction.clip(min=0)/direction
+
         for i in range(self.number_of_steps):
             print (i)
+            if self.rank == 0: print(f'Time step: {i}, time = {i*self.time_step}')
             self.solve_one_step(guess)
-            guess = self.get_solution()
-            #guess = 0.8 * guess
-            self.solution_n = guess
+            guess[:] = self.get_solution()[:]
             self.time += self.time_step
+            self.solution_n[:] = guess[:]
+
+            ### Upwinding calculation ###
+            self.my_field_overlap.Import( self.solution_n, self.field_overlap_importer, Epetra.Insert )
+
+            p = self.my_field_overlap[::2]
+            s = self.my_field_overlap[1::2]
+
+            p_state = ma.masked_array(p[self.my_neighbors]-p[:self.num_owned_neighb,None], mask=self.my_neighbors.mask)
+            s_state = ma.masked_array(s[self.my_neighbors]-s[:self.num_owned_neighb,None], mask=self.my_neighbors.mask)
+
+            ones = np.ones_like(s)
+            invert_visc = (np.exp(3.5*(ones-s)))**-1
+
+
+
+            vx_neigh =self.gamma_p * self.omega* p_state * self.my_ref_pos_state_x *(self.ref_mag_state_invert)
+            v_x =(vx_neigh * self.my_volumes[self.my_neighbors]).sum(axis=1)
+            v_x = invert_visc[:self.num_owned_neighb] * v_x
+            vy_neigh =self.gamma_p * self.omega* p_state * (self.my_ref_pos_state_y) *(self.ref_mag_state_invert)
+            v_y =(vy_neigh * self.my_volumes[self.my_neighbors]).sum(axis=1)
+            v_y = invert_visc[:self.num_owned_neighb] * v_y
+            direction = np.zeros_like(self.my_ref_pos_state_x)
+            direction = self.my_ref_pos_state_x * v_x[:,np.newaxis] + self.my_ref_pos_state_y * v_y[:,np.newaxis]
+            self.up_wind_indicator =  direction.clip(min=0)/direction
+
 
     def get_solution(self):
         return self.solver.getSolutionGroup().getX()
