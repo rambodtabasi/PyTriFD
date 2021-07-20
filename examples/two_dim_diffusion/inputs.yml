@@ -1,28 +1,30 @@
 'discretization':
-    'horizon': 0.051 #For finite difference, should be >sqrt(max(delta) ** 2) & <delta
+    'horizon': 0.021 #For finite difference, should be >sqrt(max(delta) ** 2) & <delta
     'tensor product grid':
-        'bounds': [[0.0, 2.0], [0.0, 1.0]]
-        'delta': [0.05, 0.05]
-'degrees of freedom': ['p','s']
+        'bounds': [[0.0, 3.0], [0.0, 1.0]]
+        'delta': [0.02, 0.02]
+'degrees of freedom': ['u','v']
 'load balance direction': 'x'
 'boundary conditions':
     # Right "do nothing"
     # Left
     - 'type': 'dirichlet'
-      'degrees of freedom': 'p'
+      'degrees of freedom': 'u'
       'region':
-          'box': [[-0.01, 0.21], [-0.01, 1.01]]
-      'value': 1000
+          'box': [[-0.01, 0.11], [-0.01, 1.01]]
+      'value': 1.9
     - 'type': 'dirichlet'
-      'degrees of freedom': 's'
+      'degrees of freedom': 'v'
       'region':
-          'box': [[-0.01, 0.21], [-0.01, 1.01]]
-      'value': 1.0
-    # Right
+          'box': [[-0.01, 0.11], [-0.01, 1.01]]
+      'value': 0.0
+    # cylinder
     - 'type': 'dirichlet'
-      'degrees of freedom': ['p','s']
+      'degrees of freedom': ['v','u']
       'region':
-          'box': [[1.99, 2.01], [-0.01, 1.01]]
+          'point-radius': 
+              'point' : [0.5, 0.5]
+              'radius' : 0.05
       'value': 0.0
 'numerical':
     'solver parameters':
@@ -30,18 +32,18 @@
             'Output Information':
                 'Error': false
                 'Warning': false
-                'Outer Iteration': true
-                'Inner Iteration': true
-                'Details': true
-                'Outer Iteration StatusTest': true
-                'Linear Solver Details': true
-                'Test Details': true
-                'Stepper Iteration': true
-                'Stepper Details': true
-                'Stepper Parameters': true
-                'Debug': true
-    'number of steps': 500
-    'time step': 0.003
+                'Outer Iteration': false
+                'Inner Iteration': false
+                'Details': false
+                'Outer Iteration StatusTest': false
+                'Linear Solver Details': false
+                'Test Details': false
+                'Stepper Iteration': false
+                'Stepper Details': false
+                'Stepper Parameters': false
+                'Debug': false
+    'number of steps': 5000
+    'time step': 0.002
 'output':
     'path': '/Applications/ParaView-5.9.1.app/Contents/MacOS/paraview'
     'scalar':

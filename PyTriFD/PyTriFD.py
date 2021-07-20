@@ -372,12 +372,21 @@ class FD(NOX.Epetra.Interface.Required,
                                                    self.problem_dimension)
         self.my_field_overlap = Epetra.Vector(field_overlap_map)
 
+        pressure_temp = self.my_field_overlap[::2]
+        self.pressure = Epetra.Vector(pressure_temp)
+
+        ## use this for Exporting to off proc ##
+
+
         # Create/get importers
         grid_importer = Epetra.Import(balanced_map, unbalanced_map)
         grid_overlap_importer = Epetra.Import(overlap_map, balanced_map)
         self.field_overlap_importer = Epetra.Import(field_overlap_map,
                                                     field_balanced_map)
 
+
+        self.overlap_importer = grid_overlap_importer
+        self.pressure_exporter = Epetra.Vector(overlap_map)
         # Import the unbalanced nodal data to balanced and overlap data
         my_nodes.Import(self.my_nodes, grid_importer, Epetra.Insert)
         self.my_nodes = my_nodes
@@ -424,7 +433,9 @@ class FD(NOX.Epetra.Interface.Required,
         self.num_owned_neighb = self.neighborhood_graph.NumMyRows()
         ### additional of ref-pos_x and y to finite diff code
         my_x_overlap = self.my_nodes_overlap[0,:]
+        self.my_x_overlap = my_x_overlap
         my_y_overlap = self.my_nodes_overlap[1,:]
+        self.my_y_overlap = my_y_overlap
 
         self.my_row_max_entries = self.neighborhood_graph.MaxNumIndices() - 1
         # Query the number of rows in the neighborhood graph on processor
@@ -495,36 +506,40 @@ class FD(NOX.Epetra.Interface.Required,
 
             # Ensure residual placeholder is 0.0 everywhere
             self.F_fill[:] = 0.0
-            #print ("0")
-            #print (self.F_fill.shape)
 
             # Import off-processor data
             self.my_field_overlap.Import(x, field_overlap_importer,
                                          Epetra.Insert)
-            #print ("1")
-            #Rambod
+
+
+            """ Calculate pressure based on penalty term """
+            u = self.my_field_overlap[::2]
+            v = self.my_field_overlap[1::2]
+            u_state = ma.masked_array(u[self.my_neighbors]
+                                               - u[:self.num_owned_neighb, None], mask=self.my_neighbors.mask)
+            v_state = ma.masked_array(v[self.my_neighbors] -
+                                               v[:self.num_owned_neighb, None], mask=self.my_neighbors.mask)
+
+            grad_p_x = self.pressure_const * self.gamma_p * self.omega * \
+                u_state * (self.my_ref_pos_state_x) * self.ref_mag_state_invert
+            integ_grad_p_x = (
+                grad_p_x * self.my_volumes[self.my_neighbors]).sum(axis=1)
+            grad_p_y = self.pressure_const * self.gamma_p * self.omega * \
+                v_state * (self.my_ref_pos_state_y) * self.ref_mag_state_invert
+            integ_grad_p_y = (grad_p_y * self.my_volumes[self.my_neighbors]).sum(axis=1)
+            self.int_p = -1.0 * \
+                (integ_grad_p_x + integ_grad_p_y)
+            self.pressure[:self.num_owned_neighb] = self.int_p  # + 101325
+            self.pressure.Export(self.pressure_exporter, self.overlap_importer,
+                                 Epetra.Add)
+
+
+
+            """ Call the residual calculator """
             self.F_fill[:num_owned] = self.residual_operator(self.my_field_overlap)
-            #print ("2")
-
-            """ Do nothing BC
-            # Interpolate interior values to the boundaries,
-            # i.e. "do nothing BCs"
-            s0, s1, s2, sm1, sm2, sm3 = (self.s0, self.s1, self.s2,
-                                         self.sm1, self.sm2, self.sm3)
-            for i, dof in enumerate(self.my_field_overlap):
-                for j in range(self.problem_dimension):
-                    # top/left/front
-                    self.F_fill[i][s0[j]] = dof[s0[j]] - (2 * dof[s1[j]] -
-                                                          dof[s2[j]])
-                    # bottom/right/back
-                    self.F_fill[i][sm1[j]] = dof[sm1[j]] - (2 * dof[sm2[j]] -
-                                                            dof[sm3[j]])
-
-            """
 
             F[:] = self.F_fill[:self.num_owned] #(self.F_fill.flatten()[:num_owned])
 
-            #print ("3")
             # Apply Dirichlet BCs
             for bc_lids, bc_values in zip(self.dirichlet_bc_lids,
                                           self.dirichlet_bc_values):
@@ -591,12 +606,14 @@ class FD(NOX.Epetra.Interface.Required,
     def solve(self):
 
         guess = self.my_field
+        guess[::self.nodal_dofs] = 0.09
+        self.pressure_const = 1e10
 
         self.gamma_s = 12.0 /(np.pi *(self.horizon**2.0))
         self.gamma_p = 6.0 /(np.pi *(self.horizon**2.0))
         self.omega = np.ones_like(self.my_ref_mag_state) - (self.my_ref_mag_state/self.horizon)
 
-
+        ## setup the upwind indicator array ##
         direction = np.zeros_like(self.my_ref_pos_state_x)
         self.up_wind_indicator =  direction.clip(min=0)/direction
 
@@ -608,20 +625,15 @@ class FD(NOX.Epetra.Interface.Required,
             self.time += self.time_step
             self.solution_n[:] = guess[:]
 
+            """
             ### Upwinding calculation ###
             self.my_field_overlap.Import( self.solution_n, self.field_overlap_importer, Epetra.Insert )
-
             p = self.my_field_overlap[::2]
             s = self.my_field_overlap[1::2]
-
             p_state = ma.masked_array(p[self.my_neighbors]-p[:self.num_owned_neighb,None], mask=self.my_neighbors.mask)
             s_state = ma.masked_array(s[self.my_neighbors]-s[:self.num_owned_neighb,None], mask=self.my_neighbors.mask)
-
             ones = np.ones_like(s)
             invert_visc = (np.exp(3.5*(ones-s)))**-1
-
-
-
             vx_neigh =self.gamma_p * self.omega* p_state * self.my_ref_pos_state_x *(self.ref_mag_state_invert)
             v_x =(vx_neigh * self.my_volumes[self.my_neighbors]).sum(axis=1)
             v_x = invert_visc[:self.num_owned_neighb] * v_x
@@ -631,6 +643,7 @@ class FD(NOX.Epetra.Interface.Required,
             direction = np.zeros_like(self.my_ref_pos_state_x)
             direction = self.my_ref_pos_state_x * v_x[:,np.newaxis] + self.my_ref_pos_state_y * v_y[:,np.newaxis]
             self.up_wind_indicator =  direction.clip(min=0)/direction
+            """
 
 
     def get_solution(self):
