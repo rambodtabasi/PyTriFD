@@ -512,7 +512,7 @@ class FD(NOX.Epetra.Interface.Required,
                                          Epetra.Insert)
 
             """ Calculate pressure based on penalty term """
-            #"""
+            """
             u = self.my_field_overlap[::2]
             v = self.my_field_overlap[1::2]
             u_state = ma.masked_array(u[self.my_neighbors]
@@ -534,7 +534,7 @@ class FD(NOX.Epetra.Interface.Required,
                                  Epetra.Add)
 
 
-            #"""
+            """
 
             """ Call the residual calculator """
             self.F_fill[:num_owned] = self.residual_operator(self.my_field_overlap)
@@ -608,7 +608,7 @@ class FD(NOX.Epetra.Interface.Required,
 
         guess = self.my_field
         guess[::self.nodal_dofs] = 0.0015
-        #guess[2::self.nodal_dofs] = 100000
+        guess[2::self.nodal_dofs] = 100000
         self.pressure_const = 1e10
 
         self.gamma = 6.0 /(np.pi *(self.horizon**2.0))

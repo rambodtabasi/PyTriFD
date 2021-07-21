@@ -3,7 +3,7 @@
     'tensor product grid':
         'bounds': [[0.0, 3.0], [0.0, 1.0]]
         'delta': [0.02, 0.02]
-'degrees of freedom': ['u','v']
+'degrees of freedom': ['u','v','p']
 'load balance direction': 'x'
 'boundary conditions':
     # Right "do nothing"
@@ -14,10 +14,14 @@
           'box': [[-0.01, 0.11], [-0.01, 1.01]]
       'value': 0.0015
     - 'type': 'dirichlet'
-      'degrees of freedom': 'v'
+      'degrees of freedom': ['v']
       'region':
           'box': [[-0.01, 0.11], [-0.01, 1.01]]
-      'value': 0.0
+      'value': 5.0
+      'degrees of freedom': ['p']
+      'region':
+          'box': [[-0.01, 0.11], [-0.01, 1.01]]
+      'value': 10000.0
     # cylinder
     - 'type': 'dirichlet'
       'degrees of freedom': ['v','u']
@@ -30,18 +34,18 @@
     'solver parameters':
         'Printing':
             'Output Information':
-                'Error': false
-                'Warning': false
-                'Outer Iteration': false
-                'Inner Iteration': false
-                'Details': false
-                'Outer Iteration StatusTest': false
-                'Linear Solver Details': false
-                'Test Details': false
-                'Stepper Iteration': false
-                'Stepper Details': false
-                'Stepper Parameters': false
-                'Debug': false
+                'Error': true
+                'Warning': true
+                'Outer Iteration': true
+                'Inner Iteration': true
+                'Details': true
+                'Outer Iteration StatusTest': true
+                'Linear Solver Details': true
+                'Test Details': true
+                'Stepper Iteration': true
+                'Stepper Details': true
+                'Stepper Parameters': true
+                'Debug': true
     'number of steps': 300
     'time step': 5
 'output':
