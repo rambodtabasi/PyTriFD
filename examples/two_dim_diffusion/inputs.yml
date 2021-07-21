@@ -12,7 +12,7 @@
       'degrees of freedom': 'u'
       'region':
           'box': [[-0.01, 0.11], [-0.01, 1.01]]
-      'value': 1.9
+      'value': 0.0015
     - 'type': 'dirichlet'
       'degrees of freedom': 'v'
       'region':
@@ -23,7 +23,7 @@
       'degrees of freedom': ['v','u']
       'region':
           'point-radius': 
-              'point' : [0.5, 0.5]
+              'point' : [0.5, 0.6]
               'radius' : 0.05
       'value': 0.0
 'numerical':
@@ -42,8 +42,8 @@
                 'Stepper Details': false
                 'Stepper Parameters': false
                 'Debug': false
-    'number of steps': 5000
-    'time step': 0.002
+    'number of steps': 300
+    'time step': 5
 'output':
     'path': '/Applications/ParaView-5.9.1.app/Contents/MacOS/paraview'
     'scalar':

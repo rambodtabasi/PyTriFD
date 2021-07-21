@@ -511,8 +511,8 @@ class FD(NOX.Epetra.Interface.Required,
             self.my_field_overlap.Import(x, field_overlap_importer,
                                          Epetra.Insert)
 
-
             """ Calculate pressure based on penalty term """
+            #"""
             u = self.my_field_overlap[::2]
             v = self.my_field_overlap[1::2]
             u_state = ma.masked_array(u[self.my_neighbors]
@@ -520,11 +520,11 @@ class FD(NOX.Epetra.Interface.Required,
             v_state = ma.masked_array(v[self.my_neighbors] -
                                                v[:self.num_owned_neighb, None], mask=self.my_neighbors.mask)
 
-            grad_p_x = self.pressure_const * self.gamma_p * self.omega * \
+            grad_p_x = self.pressure_const * self.gamma * self.omega * \
                 u_state * (self.my_ref_pos_state_x) * self.ref_mag_state_invert
             integ_grad_p_x = (
                 grad_p_x * self.my_volumes[self.my_neighbors]).sum(axis=1)
-            grad_p_y = self.pressure_const * self.gamma_p * self.omega * \
+            grad_p_y = self.pressure_const * self.gamma * self.omega * \
                 v_state * (self.my_ref_pos_state_y) * self.ref_mag_state_invert
             integ_grad_p_y = (grad_p_y * self.my_volumes[self.my_neighbors]).sum(axis=1)
             self.int_p = -1.0 * \
@@ -534,6 +534,7 @@ class FD(NOX.Epetra.Interface.Required,
                                  Epetra.Add)
 
 
+            #"""
 
             """ Call the residual calculator """
             self.F_fill[:num_owned] = self.residual_operator(self.my_field_overlap)
@@ -594,7 +595,7 @@ class FD(NOX.Epetra.Interface.Required,
                                           matrix_free_operator,
                                           matrix_free_operator,
                                           preconditioner, preconditioner,
-                                          nonlinear_parameters, maxIters = 20, wAbsTol=None, wRelTol=None, updateTol= False, absTol = 2.0e-4, relTol = 2.0e-6)
+                                          nonlinear_parameters, maxIters = 100, wAbsTol=None, wRelTol=None, updateTol= False, absTol = 2.0e-4, relTol = 2.0e-6)
 
         solve_status = self.solver.solve()
 
@@ -606,11 +607,12 @@ class FD(NOX.Epetra.Interface.Required,
     def solve(self):
 
         guess = self.my_field
-        guess[::self.nodal_dofs] = 0.09
+        guess[::self.nodal_dofs] = 0.0015
+        #guess[2::self.nodal_dofs] = 100000
         self.pressure_const = 1e10
 
-        self.gamma_s = 12.0 /(np.pi *(self.horizon**2.0))
-        self.gamma_p = 6.0 /(np.pi *(self.horizon**2.0))
+        self.gamma = 6.0 /(np.pi *(self.horizon**2.0))
+        self.beta = 27.0 /((np.pi *(self.horizon**2.0))* self.my_ref_mag_state**2)
         self.omega = np.ones_like(self.my_ref_mag_state) - (self.my_ref_mag_state/self.horizon)
 
         ## setup the upwind indicator array ##
