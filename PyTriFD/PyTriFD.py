@@ -6,6 +6,7 @@ import os
 import numpy as np
 import numpy.ma as ma
 import scipy.spatial
+import time as ttt
 
 from .ensight import Ensight
 
@@ -305,6 +306,7 @@ class FD(NOX.Epetra.Interface.Required,
                                            my_global_indices.shape[0],
                                            dtype=np.int32)
 
+
         for i in range(nodal_dofs):
             my_field_global_indices[i::nodal_dofs] = (nodal_dofs *
                                                       my_global_indices) + i
@@ -357,6 +359,7 @@ class FD(NOX.Epetra.Interface.Required,
         field_balanced_map = self.balanced_field_map
 
         overlap_map = self.neighborhood_graph.ColMap()
+        print (overlap_map)
         field_overlap_map = self.balanced_field_graph.ColMap()
 
         # Create the balanced vectors
@@ -374,6 +377,8 @@ class FD(NOX.Epetra.Interface.Required,
 
         pressure_temp = self.my_field_overlap[::2]
         self.pressure = Epetra.Vector(pressure_temp)
+        pressure_local_temp = self.my_field[::2]
+        self.pressure_local = Epetra.Vector(pressure_local_temp)
 
         ## use this for Exporting to off proc ##
 
@@ -385,7 +390,8 @@ class FD(NOX.Epetra.Interface.Required,
                                                     field_balanced_map)
 
 
-        self.overlap_importer = grid_overlap_importer
+        self.overlap_importer = Epetra.Import(balanced_map,overlap_map)
+        self.overlap_exporter = Epetra.Import(overlap_map,balanced_map)
         self.pressure_exporter = Epetra.Vector(overlap_map)
         # Import the unbalanced nodal data to balanced and overlap data
         my_nodes.Import(self.my_nodes, grid_importer, Epetra.Insert)
@@ -512,7 +518,7 @@ class FD(NOX.Epetra.Interface.Required,
                                          Epetra.Insert)
 
             """ Calculate pressure based on penalty term """
-            """
+            #"""
             u = self.my_field_overlap[::2]
             v = self.my_field_overlap[1::2]
             u_state = ma.masked_array(u[self.my_neighbors]
@@ -529,12 +535,16 @@ class FD(NOX.Epetra.Interface.Required,
             integ_grad_p_y = (grad_p_y * self.my_volumes[self.my_neighbors]).sum(axis=1)
             self.int_p = -1.0 * \
                 (integ_grad_p_x + integ_grad_p_y)
-            self.pressure[:self.num_owned_neighb] = self.int_p  # + 101325
-            self.pressure.Export(self.pressure_exporter, self.overlap_importer,
-                                 Epetra.Add)
+            #self.pressure[:self.num_owned_neighb] = self.int_p  # + 101325
+            self.pressure_local[:] = self.int_p  # + 101325
+            self.pressure.Import(self.pressure_local, self.overlap_exporter,
+                                 Epetra.Insert)
+            #print (self.pressure_local)
+            #print (self.pressure[:])
+            #ttt.sleep(3)
 
 
-            """
+            #"""
 
             """ Call the residual calculator """
             self.F_fill[:num_owned] = self.residual_operator(self.my_field_overlap)
@@ -608,16 +618,12 @@ class FD(NOX.Epetra.Interface.Required,
 
         guess = self.my_field
         guess[::self.nodal_dofs] = 0.0015
-        guess[2::self.nodal_dofs] = 100000
-        self.pressure_const = 1e10
+        #guess[2::self.nodal_dofs] = 100000
+        self.pressure_const = 1
 
         self.gamma = 6.0 /(np.pi *(self.horizon**2.0))
         self.beta = 27.0 /((np.pi *(self.horizon**2.0))* self.my_ref_mag_state**2)
         self.omega = np.ones_like(self.my_ref_mag_state) - (self.my_ref_mag_state/self.horizon)
-
-        ## setup the upwind indicator array ##
-        direction = np.zeros_like(self.my_ref_pos_state_x)
-        self.up_wind_indicator =  direction.clip(min=0)/direction
 
         for i in range(self.number_of_steps):
             print (i)
@@ -626,26 +632,6 @@ class FD(NOX.Epetra.Interface.Required,
             guess[:] = self.get_solution()[:]
             self.time += self.time_step
             self.solution_n[:] = guess[:]
-
-            """
-            ### Upwinding calculation ###
-            self.my_field_overlap.Import( self.solution_n, self.field_overlap_importer, Epetra.Insert )
-            p = self.my_field_overlap[::2]
-            s = self.my_field_overlap[1::2]
-            p_state = ma.masked_array(p[self.my_neighbors]-p[:self.num_owned_neighb,None], mask=self.my_neighbors.mask)
-            s_state = ma.masked_array(s[self.my_neighbors]-s[:self.num_owned_neighb,None], mask=self.my_neighbors.mask)
-            ones = np.ones_like(s)
-            invert_visc = (np.exp(3.5*(ones-s)))**-1
-            vx_neigh =self.gamma_p * self.omega* p_state * self.my_ref_pos_state_x *(self.ref_mag_state_invert)
-            v_x =(vx_neigh * self.my_volumes[self.my_neighbors]).sum(axis=1)
-            v_x = invert_visc[:self.num_owned_neighb] * v_x
-            vy_neigh =self.gamma_p * self.omega* p_state * (self.my_ref_pos_state_y) *(self.ref_mag_state_invert)
-            v_y =(vy_neigh * self.my_volumes[self.my_neighbors]).sum(axis=1)
-            v_y = invert_visc[:self.num_owned_neighb] * v_y
-            direction = np.zeros_like(self.my_ref_pos_state_x)
-            direction = self.my_ref_pos_state_x * v_x[:,np.newaxis] + self.my_ref_pos_state_y * v_y[:,np.newaxis]
-            self.up_wind_indicator =  direction.clip(min=0)/direction
-            """
 
 
     def get_solution(self):

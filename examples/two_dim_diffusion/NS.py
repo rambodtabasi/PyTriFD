@@ -18,7 +18,7 @@ class TwoDimDiffusion(FD):
         u = my_field_overlap[::self.nodal_dofs]
         v = my_field_overlap[1::self.nodal_dofs]
         p = my_field_overlap[2::self.nodal_dofs]
-        #p = self.pressure
+        p = self.pressure
 
         ### Solutions from the previsou step
         u_n = self.solution_n[::self.nodal_dofs]
@@ -83,7 +83,6 @@ class TwoDimDiffusion(FD):
 
 
 
-        #"""
         ### equation 3, incompressibility
         grad_u_x = self.gamma * self.omega * u_state * (self.my_ref_pos_state_x) * self.ref_mag_state_invert
         integ_grad_u_x = (grad_u_x * self.my_volumes[self.my_neighbors]).sum(axis=1)
@@ -92,7 +91,6 @@ class TwoDimDiffusion(FD):
         residual_eq3 = integ_grad_u_x + integ_grad_v_y
         residual[2::self.nodal_dofs] = residual_eq3[:]
         #print ("residual 3 calculated")
-        #"""
 
 
 
