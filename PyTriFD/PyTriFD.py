@@ -391,8 +391,8 @@ class FD(NOX.Epetra.Interface.Required,
 
 
         self.overlap_importer = Epetra.Import(balanced_map,overlap_map)
-        self.overlap_exporter = Epetra.Import(overlap_map,balanced_map)
-        self.pressure_exporter = Epetra.Vector(overlap_map)
+        self.overlap_exporter = Epetra.Export(overlap_map,balanced_map)
+        #self.pressure_exporter = Epetra.Vector(overlap_map)
         # Import the unbalanced nodal data to balanced and overlap data
         my_nodes.Import(self.my_nodes, grid_importer, Epetra.Insert)
         self.my_nodes = my_nodes
@@ -540,7 +540,7 @@ class FD(NOX.Epetra.Interface.Required,
             self.pressure.Import(self.pressure_local, self.overlap_exporter,
                                  Epetra.Insert)
             #print (self.pressure_local)
-            #print (self.pressure[:])
+            print (self.pressure[self.num_owned_neighb:])
             #ttt.sleep(3)
 
 
