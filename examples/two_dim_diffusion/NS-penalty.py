@@ -116,11 +116,12 @@ class TwoDimDiffusion(FD):
         #v_sol=solution[1::2]
         #my_x = nodes[::2][:self.num_owned_neighb]
         #my_y = nodes[1::2][:self.num_owned_neighb]
+        #total_velocity = (u**2 + v**2)**0.5
         #if self.rank == 0:
-        #    plt.scatter(my_x,my_y,c=u)
+        #    plt.scatter(my_x,my_y,c=total_velocity)
         #    plt.show()
-        #    plt.scatter(my_x,my_y,c=v)
-        #    plt.show()
+            #plt.scatter(my_x,my_y,c=v)
+            #plt.show()
 
         """
         v_on_proc = v[:self.num_owned]
@@ -155,7 +156,7 @@ class TwoDimDiffusion(FD):
                             u.reshape(-1,xnodes))
             ax.set_aspect('equal')
             fig.colorbar(p)
-            plt.show()
+            plt.savefig("graphs/plot_x.png")
 
         if self.rank == 0:
             fig, ax = plt.subplots()
@@ -164,7 +165,7 @@ class TwoDimDiffusion(FD):
                             v.reshape(-1,xnodes))
             ax.set_aspect('equal')
             fig.colorbar(p)
-            plt.show()
+            plt.savefig("graphs/plot_y.png")
 
 
 if __name__ == "__main__":

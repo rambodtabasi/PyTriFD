@@ -359,7 +359,6 @@ class FD(NOX.Epetra.Interface.Required,
         field_balanced_map = self.balanced_field_map
 
         overlap_map = self.neighborhood_graph.ColMap()
-        print (overlap_map)
         field_overlap_map = self.balanced_field_graph.ColMap()
 
         # Create the balanced vectors
@@ -376,9 +375,11 @@ class FD(NOX.Epetra.Interface.Required,
         self.my_field_overlap = Epetra.Vector(field_overlap_map)
 
         pressure_temp = self.my_field_overlap[::2]
-        self.pressure = Epetra.Vector(pressure_temp)
+        self.pressure = Epetra.Vector(overlap_map)
+        self.pressure[:] = pressure_temp
         pressure_local_temp = self.my_field[::2]
-        self.pressure_local = Epetra.Vector(pressure_local_temp)
+        self.pressure_local = Epetra.Vector(balanced_map)
+        self.pressure_local[:] = pressure_local_temp
 
         ## use this for Exporting to off proc ##
 
@@ -540,7 +541,7 @@ class FD(NOX.Epetra.Interface.Required,
             self.pressure.Import(self.pressure_local, self.overlap_exporter,
                                  Epetra.Insert)
             #print (self.pressure_local)
-            print (self.pressure[self.num_owned_neighb:])
+            #print (self.pressure[:])
             #ttt.sleep(3)
 
 
@@ -617,7 +618,7 @@ class FD(NOX.Epetra.Interface.Required,
     def solve(self):
 
         guess = self.my_field
-        guess[::self.nodal_dofs] = 0.0015
+        guess[::self.nodal_dofs] = 0.00015
         #guess[2::self.nodal_dofs] = 100000
         self.pressure_const = 1
 
@@ -632,6 +633,9 @@ class FD(NOX.Epetra.Interface.Required,
             guess[:] = self.get_solution()[:]
             self.time += self.time_step
             self.solution_n[:] = guess[:]
+            if (i % 5 == 0) :
+                self.current_i = i
+                self.plot_solution()
 
 
     def get_solution(self):

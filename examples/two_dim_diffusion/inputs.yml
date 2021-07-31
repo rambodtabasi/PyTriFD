@@ -1,8 +1,8 @@
 'discretization':
-    'horizon': 0.021 #For finite difference, should be >sqrt(max(delta) ** 2) & <delta
+    'horizon': 0.031 #For finite difference, should be >sqrt(max(delta) ** 2) & <delta
     'tensor product grid':
         'bounds': [[0.0, 3.0], [0.0, 1.0]]
-        'delta': [0.02, 0.02]
+        'delta': [0.03, 0.03]
 'degrees of freedom': ['u','v']
 'load balance direction': 'x'
 'boundary conditions':
@@ -25,12 +25,12 @@
       'region':
           'box': [[1.5, 3.01], [-0.01, 0.5]]
       'value': 0.0
-    # Left
+    ## Left
     - 'type': 'dirichlet'
       'degrees of freedom': 'u'
       'region':
           'box': [[-0.01, 0.11], [-0.01, 1.01]]
-      'value': 0.0015
+      'value': 0.00015
     - 'type': 'dirichlet'
       'degrees of freedom': ['v']
       'region':
@@ -61,8 +61,8 @@
                 'Stepper Details': true
                 'Stepper Parameters': true
                 'Debug': true
-    'number of steps': 20000
-    'time step': 0.0005
+    'number of steps': 12
+    'time step': 0.001
 'output':
     'path': '/Applications/ParaView-5.9.1.app/Contents/MacOS/paraview'
     'scalar':
