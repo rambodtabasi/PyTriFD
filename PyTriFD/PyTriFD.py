@@ -301,6 +301,7 @@ class FD(NOX.Epetra.Interface.Required,
         nodal_dofs = self.nodal_dofs
 
         my_global_indices = self.balanced_map.MyGlobalElements()
+        self.my_global_indices = my_global_indices
 
         my_field_global_indices = np.empty(nodal_dofs *
                                            my_global_indices.shape[0],
@@ -323,6 +324,7 @@ class FD(NOX.Epetra.Interface.Required,
         self.balanced_field_graph = Epetra.CrsGraph(Epetra.Copy,
                                                     self.balanced_field_map,
                                                     True)
+        # u1,u2,u3,v1,v2,v3,p1, p2, p3
         # fill the field graph
         for i in my_global_indices:
             # array of global indices in neighborhood of each node
@@ -333,13 +335,15 @@ class FD(NOX.Epetra.Interface.Required,
             for j in range(nodal_dofs):
                 field_index_array.append(nodal_dofs * global_index_array + j)
 
-            field_index_array = np.sort(np.array(field_index_array).flatten())
+            #field_index_array = np.sort(np.array(field_index_array).flatten())
+            field_index_array = np.array(field_index_array).flatten()
 
             # insert rows into balanced graph per appropriate rows
             for j in range(nodal_dofs):
+                #self.balanced_field_graph.InsertGlobalIndices(
+                #        nodal_dofs * i + j, field_index_array)
                 self.balanced_field_graph.InsertGlobalIndices(
-                        nodal_dofs * i + j, field_index_array)
-
+                        nodal_dofs * j + i, field_index_array)
         # complete fill of balanced graph
         self.balanced_field_graph.FillComplete()
 
@@ -373,13 +377,16 @@ class FD(NOX.Epetra.Interface.Required,
         self.my_nodes_overlap = Epetra.MultiVector(overlap_map,
                                                    self.problem_dimension)
         self.my_field_overlap = Epetra.Vector(field_overlap_map)
-
-        pressure_temp = self.my_field_overlap[::2]
-        self.pressure = Epetra.Vector(overlap_map)
-        self.pressure[:] = pressure_temp
-        pressure_local_temp = self.my_field[::2]
-        self.pressure_local = Epetra.Vector(balanced_map)
-        self.pressure_local[:] = pressure_local_temp
+        #""" only needed for penalty method
+        self.dofs_size_overlap = int(len(self.my_field_overlap)/self.nodal_dofs)
+        self.dofs_size = int(len(self.my_field)/self.nodal_dofs)
+        #pressure_temp = self.my_field_overlap[::2]
+        #self.pressure = Epetra.Vector(overlap_map)
+        #self.pressure[:] = pressure_temp
+        #pressure_local_temp = self.my_field[::2]
+        #self.pressure_local = Epetra.Vector(balanced_map)
+        #self.pressure_local[:] = pressure_local_temp
+        #"""
 
         ## use this for Exporting to off proc ##
 
@@ -518,34 +525,8 @@ class FD(NOX.Epetra.Interface.Required,
             self.my_field_overlap.Import(x, field_overlap_importer,
                                          Epetra.Insert)
 
-            """ Calculate pressure based on penalty term """
-            #"""
-            u = self.my_field_overlap[::2]
-            v = self.my_field_overlap[1::2]
-            u_state = ma.masked_array(u[self.my_neighbors]
-                                               - u[:self.num_owned_neighb, None], mask=self.my_neighbors.mask)
-            v_state = ma.masked_array(v[self.my_neighbors] -
-                                               v[:self.num_owned_neighb, None], mask=self.my_neighbors.mask)
-
-            grad_p_x = self.pressure_const * self.gamma * self.omega * \
-                u_state * (self.my_ref_pos_state_x) * self.ref_mag_state_invert
-            integ_grad_p_x = (
-                grad_p_x * self.my_volumes[self.my_neighbors]).sum(axis=1)
-            grad_p_y = self.pressure_const * self.gamma * self.omega * \
-                v_state * (self.my_ref_pos_state_y) * self.ref_mag_state_invert
-            integ_grad_p_y = (grad_p_y * self.my_volumes[self.my_neighbors]).sum(axis=1)
-            self.int_p = -1.0 * \
-                (integ_grad_p_x + integ_grad_p_y)
-            #self.pressure[:self.num_owned_neighb] = self.int_p  # + 101325
-            self.pressure_local[:] = self.int_p  # + 101325
-            self.pressure.Import(self.pressure_local, self.overlap_exporter,
-                                 Epetra.Insert)
-            #print (self.pressure_local)
-            #print (self.pressure[:])
-            #ttt.sleep(3)
 
 
-            #"""
 
             """ Call the residual calculator """
             self.F_fill[:num_owned] = self.residual_operator(self.my_field_overlap)
@@ -620,7 +601,7 @@ class FD(NOX.Epetra.Interface.Required,
         guess = self.my_field
         guess[::self.nodal_dofs] = 0.00015
         #guess[2::self.nodal_dofs] = 100000
-        self.pressure_const = 1
+        self.pressure_const = 1e6
 
         self.gamma = 6.0 /(np.pi *(self.horizon**2.0))
         self.beta = 27.0 /((np.pi *(self.horizon**2.0))* self.my_ref_mag_state**2)
@@ -628,12 +609,35 @@ class FD(NOX.Epetra.Interface.Required,
 
         for i in range(self.number_of_steps):
             print (i)
+
+            """ Calculate pressure based on penalty term """
+            """
+            u = self.my_field_overlap[::2]
+            v = self.my_field_overlap[1::2]
+            u_state = ma.masked_array(u[self.my_neighbors]
+                                               - u[:self.num_owned_neighb, None], mask=self.my_neighbors.mask)
+            v_state = ma.masked_array(v[self.my_neighbors] -
+                                               v[:self.num_owned_neighb, None], mask=self.my_neighbors.mask)
+
+            grad_p_x = self.pressure_const * self.gamma * self.omega * \
+                u_state * (self.my_ref_pos_state_x) * self.ref_mag_state_invert
+            integ_grad_p_x = (
+                grad_p_x * self.my_volumes[self.my_neighbors]).sum(axis=1)
+            grad_p_y = self.pressure_const * self.gamma * self.omega * \
+                v_state * (self.my_ref_pos_state_y) * self.ref_mag_state_invert
+            integ_grad_p_y = (grad_p_y * self.my_volumes[self.my_neighbors]).sum(axis=1)
+            self.int_p = -1.0 * (integ_grad_p_x + integ_grad_p_y)
+
+            self.pressure_local[:] = self.int_p  # + 101325
+            self.pressure.Import(self.pressure_local, self.overlap_exporter, Epetra.Insert)
+            """
+
             if self.rank == 0: print(f'Time step: {i}, time = {i*self.time_step}')
             self.solve_one_step(guess)
             guess[:] = self.get_solution()[:]
             self.time += self.time_step
             self.solution_n[:] = guess[:]
-            if (i % 5 == 0) :
+            if (i % 200 == 0) :
                 self.current_i = i
                 self.plot_solution()
 

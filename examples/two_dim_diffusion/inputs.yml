@@ -1,9 +1,9 @@
 'discretization':
-    'horizon': 0.031 #For finite difference, should be >sqrt(max(delta) ** 2) & <delta
+    'horizon': 0.31 #For finite difference, should be >sqrt(max(delta) ** 2) & <delta
     'tensor product grid':
         'bounds': [[0.0, 3.0], [0.0, 1.0]]
-        'delta': [0.03, 0.03]
-'degrees of freedom': ['u','v']
+        'delta': [0.3, 0.3]
+'degrees of freedom': ['u','v','p']
 'load balance direction': 'x'
 'boundary conditions':
     # Right "do nothing"
@@ -13,18 +13,6 @@
     #  'region':
     #      'box': [[2.9, 3.01], [-0.01, 1.01]]
     #  'value': 0.0
-    # Top
-    #- 'type': 'dirichlet'
-    #  'degrees of freedom': ['u','v']
-    #  'region':
-    #      'box': [[-0.01, 3.01], [0.9, 1.01]]
-    #  'value': 0.0
-    ## Box
-    - 'type': 'dirichlet'
-      'degrees of freedom': ['u','v']
-      'region':
-          'box': [[1.5, 3.01], [-0.01, 0.5]]
-      'value': 0.0
     ## Left
     - 'type': 'dirichlet'
       'degrees of freedom': 'u'
@@ -36,13 +24,31 @@
       'region':
           'box': [[-0.01, 0.11], [-0.01, 1.01]]
       'value': 0.0
+    ## Top
+    #- 'type': 'dirichlet'
+    #  'degrees of freedom': ['u','v']
+    #  'region':
+    #      'box': [[-0.01, 3.01], [0.9, 1.1]]
+    #  'value': 0.0
+    ## Bottom
+    #- 'type': 'dirichlet'
+    #  'degrees of freedom': ['u','v']
+    #  'region':
+    #      'box': [[-0.01, 3.01], [-0.01, 0.1]]
+    #  'value': 0.0
+    ## Box
+    - 'type': 'dirichlet'
+      'degrees of freedom': ['u','v']
+      'region':
+          'box': [[1.5, 3.01], [0.5, 1.1]]
+      'value': 0.0
           
     # cylinder
     #- 'type': 'dirichlet'
     #  'degrees of freedom': ['v','u']
     #  'region':
     #      'point-radius': 
-    #          'point' : [0.5, 0.6]
+    #          'point' : [1.0, 0.5]
     #          'radius' : 0.05
     #  'value': 0.0
 'numerical':
@@ -61,8 +67,8 @@
                 'Stepper Details': true
                 'Stepper Parameters': true
                 'Debug': true
-    'number of steps': 12
-    'time step': 0.001
+    'number of steps': 800000
+    'time step': 0.0000000001
 'output':
     'path': '/Applications/ParaView-5.9.1.app/Contents/MacOS/paraview'
     'scalar':

@@ -156,7 +156,7 @@ class TwoDimDiffusion(FD):
                             u.reshape(-1,xnodes))
             ax.set_aspect('equal')
             fig.colorbar(p)
-            plt.savefig("graphs/plot_x.png")
+            plt.savefig("graphs/"+ "x_" + str(self.current_i)+".png")
 
         if self.rank == 0:
             fig, ax = plt.subplots()
@@ -165,7 +165,7 @@ class TwoDimDiffusion(FD):
                             v.reshape(-1,xnodes))
             ax.set_aspect('equal')
             fig.colorbar(p)
-            plt.savefig("graphs/plot_y.png")
+            plt.savefig("graphs/"+ "y_" + str(self.current_i)+".png")
 
 
 if __name__ == "__main__":
