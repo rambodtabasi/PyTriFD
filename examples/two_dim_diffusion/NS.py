@@ -14,9 +14,9 @@ class TwoDimDiffusion(FD):
     def residual_operator(self, my_field_overlap):
 
         #print ("entered compute residual")
-        u = my_field_overlap[:self.dofs_size_overlap]
-        v = my_field_overlap[self.dofs_size:(2*self.dofs_size_overlap)]
-        p = my_field_overlap[2*self.dofs_size_overlap:]
+        u = my_field_overlap[::2]
+        v = my_field_overlap[1::2]
+        p = my_field_overlap[2::2]
 
         ### Solutions from the previsou step
         u_n = self.solution_n[:self.dofs_size]
@@ -90,15 +90,15 @@ class TwoDimDiffusion(FD):
         grad_v_y = self.gamma * self.omega * v_state * (self.my_ref_pos_state_y) * self.ref_mag_state_invert
         integ_grad_v_y = (grad_v_y * self.my_volumes[self.my_neighbors]).sum(axis=1)
         residual_eq3 = integ_grad_u_x + integ_grad_v_y
-        residual[2::self.nodal_dofs] = residual_eq3[:]
         print ("residual 3 calculated")
         #print ("Calculation is complete")
 
 
 
         #print ("exiting compute residual")
-        residual[::self.nodal_dofs] = residual_eq1[:]
-        residual[1::self.nodal_dofs] = residual_eq2[:]
+        residual[:self.dofs_size] = residual_eq1[:]
+        residual[self.dofs_size:2*self.dofs_size] = residual_eq2[:]
+        residual[2*self.dofs_size:] = residual_eq3[:]
         return residual
 
     def plot_solution(self):

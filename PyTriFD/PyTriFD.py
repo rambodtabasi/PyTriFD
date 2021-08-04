@@ -60,6 +60,7 @@ class FD(NOX.Epetra.Interface.Required,
         #self.init_output()
         # Initialize the field graph
         self.init_field_graph()
+        self.init_block_field_graph()
         # Initialize grid data structures
         self.init_grid_data()
         # Compute "do nothing" boundary slices
@@ -295,6 +296,63 @@ class FD(NOX.Epetra.Interface.Required,
 
         return
 
+    def init_block_field_graph(self):
+
+        nodal_dofs = self.nodal_dofs
+
+        my_global_indices = self.balanced_map.MyGlobalElements()
+        self.my_global_indices = my_global_indices
+
+        my_field_global_indices = np.empty(nodal_dofs *
+                                           my_global_indices.shape[0],
+                                           dtype=np.int32)
+
+
+        for i in range(nodal_dofs):
+            my_field_global_indices[i::nodal_dofs] = (nodal_dofs *
+                                                      my_global_indices) + i
+
+        number_of_field_variables =  (nodal_dofs *
+                                      self.global_number_of_nodes)
+
+        # create Epetra Map based on node degrees of Freedom
+        self.balanced_block_field_map = Epetra.Map(number_of_field_variables,
+                                             my_field_global_indices.tolist(),
+                                             0, self.comm)
+
+        # Instantiate the corresponding graph
+        self.balanced_block_field_graph = Epetra.CrsGraph(Epetra.Copy,
+                                                    self.balanced_field_map,
+                                                    True)
+        # u1,u2,u3,v1,v2,v3,p1, p2, p3
+        # fill the field graph
+        for i in my_global_indices:
+            # array of global indices in neighborhood of each node
+            global_index_array = (self.neighborhood_graph
+                                      .ExtractGlobalRowCopy(i))
+            # convert global node indices to appropriate field indices
+            field_index_array = []
+            for j in range(nodal_dofs):
+                field_index_array.append(nodal_dofs * global_index_array + j)
+
+            #field_index_array = np.sort(np.array(field_index_array).flatten())
+            field_index_array = np.array(field_index_array).flatten()
+
+            # insert rows into balanced graph per appropriate rows
+            for j in range(nodal_dofs):
+
+                #self.balanced_block_field_graph.InsertGlobalIndices(
+                #        nodal_dofs * i + j, field_index_array)
+
+                self.balanced_block_field_graph.InsertGlobalIndices(
+                        nodal_dofs * j + i, field_index_array)
+
+        # complete fill of balanced graph
+        self.balanced_block_field_graph.FillComplete()
+
+        #self.num_owned = self.balanced_field_graph.NumMyRows()
+
+        return
 
     def init_field_graph(self):
 
@@ -335,18 +393,18 @@ class FD(NOX.Epetra.Interface.Required,
             for j in range(nodal_dofs):
                 field_index_array.append(nodal_dofs * global_index_array + j)
 
-            #field_index_array = np.sort(np.array(field_index_array).flatten())
-            field_index_array = np.array(field_index_array).flatten()
+            field_index_array = np.sort(np.array(field_index_array).flatten())
+            #field_index_array = np.array(field_index_array).flatten()
 
             # insert rows into balanced graph per appropriate rows
             for j in range(nodal_dofs):
-                #self.balanced_field_graph.InsertGlobalIndices(
-                #        nodal_dofs * i + j, field_index_array)
                 self.balanced_field_graph.InsertGlobalIndices(
-                        nodal_dofs * j + i, field_index_array)
+                        nodal_dofs * i + j, field_index_array)
+                #self.balanced_field_graph.InsertGlobalIndices(
+                #        nodal_dofs * j + i, field_index_array)
+
         # complete fill of balanced graph
         self.balanced_field_graph.FillComplete()
-
         self.num_owned = self.balanced_field_graph.NumMyRows()
 
         return
@@ -361,14 +419,17 @@ class FD(NOX.Epetra.Interface.Required,
         unbalanced_map = self.my_nodes.Map()
         balanced_map = self.balanced_map
         field_balanced_map = self.balanced_field_map
+        field_block_balanced_map = self.balanced_block_field_map
 
         overlap_map = self.neighborhood_graph.ColMap()
         field_overlap_map = self.balanced_field_graph.ColMap()
+        field_block_overlap_map = self.balanced_block_field_graph.ColMap()
 
         # Create the balanced vectors
         my_nodes = Epetra.MultiVector(balanced_map,
                                       self.problem_dimension)
         self.my_field = Epetra.Vector(field_balanced_map)
+        self.my_block_field = Epetra.Vector(field_block_balanced_map)
         self.solution_n = self.my_field
         #Rambod
         self.my_field_n = Epetra.Vector(field_balanced_map)
@@ -579,7 +640,7 @@ class FD(NOX.Epetra.Interface.Required,
         preconditioner = \
             NOX.Epetra.FiniteDifferenceColoring(print_parameters, self,
                                                 initial_guess,
-                                                self.balanced_field_graph,
+                                                self.balanced_block_field_graph,
                                                 True)
 
         #Create and execute the solver
@@ -598,10 +659,9 @@ class FD(NOX.Epetra.Interface.Required,
 
     def solve(self):
 
-        guess = self.my_field
-        guess[::self.nodal_dofs] = 0.00015
-        #guess[2::self.nodal_dofs] = 100000
-        self.pressure_const = 1e6
+        guess = self.my_block_field
+        guess[:self.dofs_size] = 0.00015
+        #self.pressure_const = 1e6
 
         self.gamma = 6.0 /(np.pi *(self.horizon**2.0))
         self.beta = 27.0 /((np.pi *(self.horizon**2.0))* self.my_ref_mag_state**2)
