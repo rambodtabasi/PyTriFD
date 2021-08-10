@@ -1,9 +1,9 @@
 'discretization':
-    'horizon': 0.31 #For finite difference, should be >sqrt(max(delta) ** 2) & <delta
+    'horizon': 0.011 #For finite difference, should be >sqrt(max(delta) ** 2) & <delta
     'tensor product grid':
         'bounds': [[0.0, 3.0], [0.0, 1.0]]
-        'delta': [0.3, 0.3]
-'degrees of freedom': ['u','v','p']
+        'delta': [0.01, 0.01]
+'degrees of freedom': ['u','v']
 'load balance direction': 'x'
 'boundary conditions':
     # Right "do nothing"
@@ -18,7 +18,7 @@
       'degrees of freedom': 'u'
       'region':
           'box': [[-0.01, 0.11], [-0.01, 1.01]]
-      'value': 0.00015
+      'value': 0.0003
     - 'type': 'dirichlet'
       'degrees of freedom': ['v']
       'region':
@@ -42,15 +42,27 @@
       'region':
           'box': [[1.5, 3.01], [0.5, 1.1]]
       'value': 0.0
+    # Box
+    - 'type': 'dirichlet'
+      'degrees of freedom': ['u','v']
+      'region':
+          'box': [[1.4, 1.55], [0.5, 1.1]]
+      'value': 0.0
+    ## Box
+    - 'type': 'dirichlet'
+      'degrees of freedom': ['u','v']
+      'region':
+          'box': [[1.5, 3.01], [0.4, 0.6]]
+      'value': 0.0
           
-    # cylinder
-    #- 'type': 'dirichlet'
-    #  'degrees of freedom': ['v','u']
-    #  'region':
-    #      'point-radius': 
-    #          'point' : [1.0, 0.5]
-    #          'radius' : 0.05
-    #  'value': 0.0
+    ##cylinder
+    - 'type': 'dirichlet'
+      'degrees of freedom': ['v','u']
+      'region':
+          'point-radius': 
+              'point' : [1.5, 0.5]
+              'radius' : 0.1
+      'value': 0.0
 'numerical':
     'solver parameters':
         'Printing':
@@ -67,8 +79,8 @@
                 'Stepper Details': true
                 'Stepper Parameters': true
                 'Debug': true
-    'number of steps': 800000
-    'time step': 0.0000000001
+    'number of steps': 10000
+    'time step': 0.01
 'output':
     'path': '/Applications/ParaView-5.9.1.app/Contents/MacOS/paraview'
     'scalar':
