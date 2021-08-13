@@ -607,7 +607,7 @@ class FD(NOX.Epetra.Interface.Required,
     def solve(self):
 
         guess = self.my_field
-        guess[::self.nodal_dofs] = 0.0003
+        guess[::self.nodal_dofs] = 0.03
         #guess[2::self.nodal_dofs] = 100000
         self.pressure_const = 1e3
 
@@ -627,7 +627,7 @@ class FD(NOX.Epetra.Interface.Required,
             guess[:] = self.get_solution()[:]
             self.time += self.time_step
             self.solution_n[:] = guess[:]
-            if i % 20 == 0 :
+            if i % 200 == 0 :
                 self.plot_solution()
 
             """

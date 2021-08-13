@@ -1,8 +1,8 @@
 'discretization':
-    'horizon': 0.011 #For finite difference, should be >sqrt(max(delta) ** 2) & <delta
+    'horizon': 0.041 #For finite difference, should be >sqrt(max(delta) ** 2) & <delta
     'tensor product grid':
         'bounds': [[0.0, 3.0], [0.0, 1.0]]
-        'delta': [0.01, 0.01]
+        'delta': [0.04, 0.04]
 'degrees of freedom': ['u','v']
 'load balance direction': 'x'
 'boundary conditions':
@@ -18,7 +18,7 @@
       'degrees of freedom': 'u'
       'region':
           'box': [[-0.01, 0.11], [-0.01, 1.01]]
-      'value': 0.0003
+      'value': 0.03
     - 'type': 'dirichlet'
       'degrees of freedom': ['v']
       'region':
@@ -42,7 +42,7 @@
       'region':
           'box': [[1.5, 3.01], [0.5, 1.1]]
       'value': 0.0
-    # Box
+    ## Box
     - 'type': 'dirichlet'
       'degrees of freedom': ['u','v']
       'region':
