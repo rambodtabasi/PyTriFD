@@ -6,6 +6,7 @@ import os
 import numpy as np
 import numpy.ma as ma
 import scipy.spatial
+import matplotlib.pyplot as plt
 
 from .ensight import Ensight
 
@@ -13,6 +14,7 @@ from PyTrilinos import Epetra
 from PyTrilinos import Teuchos
 from PyTrilinos import Isorropia
 from PyTrilinos import NOX
+
 
 
 class FD(NOX.Epetra.Interface.Required,
@@ -207,6 +209,7 @@ class FD(NOX.Epetra.Interface.Required,
             my_num_nodes = nodes.shape[0]
             num_dims = 0
 
+
         self.global_number_of_nodes = self.comm.SumAll(my_num_nodes)
         self.problem_dimension = self.comm.SumAll(num_dims)
 
@@ -372,9 +375,11 @@ class FD(NOX.Epetra.Interface.Required,
                                                    self.problem_dimension)
         self.my_field_overlap = Epetra.Vector(field_overlap_map)
 
-        pressure_temp = self.my_field_overlap[::2]
-        self.pressure = Epetra.Vector(pressure_temp)
+        #pressure_temp = self.my_field_overlap[::2]
+        self.pressure = Epetra.Vector(overlap_map)
 
+        #pressure_local_temp = self.my_field_n[::2]
+        self.pressure_local = Epetra.Vector(balanced_map)
         ## use this for Exporting to off proc ##
 
 
@@ -387,10 +392,18 @@ class FD(NOX.Epetra.Interface.Required,
 
         self.overlap_importer = grid_overlap_importer
         self.pressure_exporter = Epetra.Vector(overlap_map)
+        self.overlap_exporter = Epetra.Export(overlap_map,balanced_map)
         # Import the unbalanced nodal data to balanced and overlap data
         my_nodes.Import(self.my_nodes, grid_importer, Epetra.Insert)
         self.my_nodes = my_nodes
-
+        """ Print x and y of nodes on each processor"""
+        """
+        print (self.my_nodes.shape)
+        for i in range(self.size):
+            if self.rank ==7:
+                plt.scatter(self.my_nodes[0,:],self.my_nodes[1,:])
+                plt.show()
+        """
         #Create a kdtree to do nearest neighbor searches
         self.my_tree = scipy.spatial.cKDTree(self.my_nodes[:].T)
 
@@ -527,12 +540,15 @@ class FD(NOX.Epetra.Interface.Required,
             grad_p_y = self.pressure_const * self.gamma * self.omega * \
                 v_state * (self.my_ref_pos_state_y) * self.ref_mag_state_invert
             integ_grad_p_y = (grad_p_y * self.my_volumes[self.my_neighbors]).sum(axis=1)
-            self.int_p = -1.0 * \
-                (integ_grad_p_x + integ_grad_p_y)
-            self.pressure[:self.num_owned_neighb] = self.int_p  # + 101325
-            self.pressure.Export(self.pressure_exporter, self.overlap_importer,
-                                 Epetra.Add)
+            self.int_p = -1.0 * (integ_grad_p_x + integ_grad_p_y)
+            self.pressure_local[:] = self.int_p  # + 101325
+            #ttt.sleep(1)
+            self.pressure.Import(self.pressure_local, self.overlap_importer,
+                                 Epetra.Insert)
 
+
+
+            #print (self.pressure)
 
             #"""
 
@@ -607,9 +623,9 @@ class FD(NOX.Epetra.Interface.Required,
     def solve(self):
 
         guess = self.my_field
-        guess[::self.nodal_dofs] = 0.03
+        guess[::self.nodal_dofs] = 0.25
         #guess[2::self.nodal_dofs] = 100000
-        self.pressure_const = 1e3
+        self.pressure_const = 1.5
 
         self.gamma = 6.0 /(np.pi *(self.horizon**2.0))
         self.beta = 27.0 /((np.pi *(self.horizon**2.0))* self.my_ref_mag_state**2)
