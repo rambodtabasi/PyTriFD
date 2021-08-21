@@ -227,7 +227,7 @@ class FD(NOX.Epetra.Interface.Required,
 
     def get_neighborhoods(self):
         """cKDTree implemented for neighbor search """
-
+        #""" normal neighborhood
         if self.rank == 0:
             #Create a kdtree to do nearest neighbor search
             tree = scipy.spatial.cKDTree(self.my_nodes[:].T)
@@ -236,9 +236,44 @@ class FD(NOX.Epetra.Interface.Required,
             self.neighborhoods = tree.query_ball_point(self.my_nodes[:].T,
                                                        r=self.horizon,
                                                        eps=0.0, p=2)
+
         else:
             #Setup empty data on other ranks
             self.neighborhoods = []
+        #print (self.neighborhoods)
+        #print (self.my_nodes[:].T)
+        """
+        width = 1.0
+        length = 3.0
+        self.grid_spacing = 0.03
+        self.nodes = self.my_nodes[:].T
+        if self.rank == 0:
+            # Create a kdtree to do nearest neighbor search
+            tree = scipy.spatial.cKDTree(self.nodes)
+            # Get all neighborhoods
+            for i in range(len(self.nodes)):
+                nodes = self.nodes[i]
+                if nodes[1] < self.horizon:
+                    self.nodes[i][1] = nodes[1] + width + self.grid_spacing
+            self.neighborhoods_down = tree.query_ball_point(self.nodes,
+                                                            r=self.horizon, eps=0.0, p=2)
+        self.create_grid()
+        if self.rank == 0:
+            tree = scipy.spatial.cKDTree(self.nodes)
+            for i in range(len(self.nodes)):
+                nodes = self.nodes[i]
+                if nodes[1] > (width - self.horizon):
+                    self.nodes[i][1] = nodes[1] - width - self.grid_spacing
+            self.neighborhoods_up = tree.query_ball_point(self.nodes,r=self.horizon, eps=0.0, p=2)
+        self.create_grid()
+        if self.rank == 0:
+            tree = scipy.spatial.cKDTree(self.nodes)
+            self.neighborhoods = self.neighborhoods_down
+            for i in range(len(self.nodes)):
+                self.neighborhoods[i] = np.append(self.neighborhoods_down[i], self.neighborhoods_up[i])
+                self.neighborhoods[i] = np.array(self.neighborhoods[i], dtype=np.int32)
+        #print (self.neighborhoods.shape)
+        """
 
         return
 
@@ -253,12 +288,13 @@ class FD(NOX.Epetra.Interface.Required,
         unbalanced_map = self.my_nodes.Map()
 
         #Compute a list of the lengths of each neighborhood list
-        num_indices_per_row = np.array([ len(item)
-            for item in self.neighborhoods ], dtype=np.int32)
+        num_indices_per_row = np.array([len(item)
+            for item in self.neighborhoods], dtype=np.int32)
 
         #Instantiate the graph
         self.neighborhood_graph = Epetra.CrsGraph(Epetra.Copy, unbalanced_map,
                                                   num_indices_per_row, True)
+        print ("1")
 
         #Fill the graph
         for rid, row in enumerate(self.neighborhoods):
@@ -282,8 +318,7 @@ class FD(NOX.Epetra.Interface.Required,
         if not self.verbose:
             parameter_sublist.set("DEBUG_LEVEL", "0")
         # Create a partitioner to load balance the graph
-        partitioner = Isorropia.Epetra.Partitioner(self.my_nodes[
-            self.load_balance_direction], parameter_list)
+        partitioner = Isorropia.Epetra.Partitioner(self.my_nodes, parameter_list)
         # And a redistributer
         redistributer = Isorropia.Epetra.Redistributor(partitioner)
 
@@ -390,7 +425,7 @@ class FD(NOX.Epetra.Interface.Required,
                                                     field_balanced_map)
 
 
-        self.overlap_importer = grid_overlap_importer
+        self.overlap_importer = Epetra.Import(overlap_map, balanced_map)
         self.pressure_exporter = Epetra.Vector(overlap_map)
         self.overlap_exporter = Epetra.Export(overlap_map,balanced_map)
         # Import the unbalanced nodal data to balanced and overlap data
@@ -625,7 +660,7 @@ class FD(NOX.Epetra.Interface.Required,
         guess = self.my_field
         guess[::self.nodal_dofs] = 0.25
         #guess[2::self.nodal_dofs] = 100000
-        self.pressure_const = 1.5
+        self.pressure_const = 30.5
 
         self.gamma = 6.0 /(np.pi *(self.horizon**2.0))
         self.beta = 27.0 /((np.pi *(self.horizon**2.0))* self.my_ref_mag_state**2)
