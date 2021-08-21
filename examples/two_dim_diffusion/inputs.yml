@@ -17,7 +17,7 @@
       'degrees of freedom': ['u']
       'region':
           'box': [[4.9, 3.01], [-0.01, 1.01]]
-      'value': 0.03
+      'value': 0.25
     ## Left
     #- 'type': 'dirichlet'
     #  'degrees of freedom': 'u'
