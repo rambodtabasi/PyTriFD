@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time as ttt
 import warnings
+import matplotlib.cm as cm
 
 warnings.filterwarnings("ignore")
 
@@ -18,7 +19,7 @@ class TwoDimDiffusion(FD):
         u = my_field_overlap[::self.nodal_dofs]
         v = my_field_overlap[1::self.nodal_dofs]
         #p = my_field_overlap[2::self.nodal_dofs]
-        p = self.pressure
+        p = self.pressure_overlap
 
         ### Solutions from the previsou step
         u_n = self.solution_n[::self.nodal_dofs]
@@ -35,7 +36,18 @@ class TwoDimDiffusion(FD):
         ## at 15C
         rho = 1.225
         viscosity = 1.8e-5
-        visc_sum = 2*(viscosity/rho)
+        visc_sum = 2.0 * (viscosity/rho)
+        """
+        len_nodes = len(self.my_nodes[:].T)
+        #print (len_nodes)
+        if self.rank ==0:
+            #print (self.my_nodes[:,701])
+            #print (self.num_owned_neighb)
+            #print (self.my_neighbors[640])
+        print (self.my_nodes[:,60])
+
+        ttt.sleep(1)
+        """
 
         u_state = ma.masked_array(u[self.my_neighbors]
             -u[:self.num_owned_neighb,None], mask=self.my_neighbors.mask)
@@ -43,9 +55,23 @@ class TwoDimDiffusion(FD):
             -v[:self.num_owned_neighb,None], mask=self.my_neighbors.mask)
         p_state = ma.masked_array(p[self.my_neighbors]
             -p[:self.num_owned_neighb,None], mask=self.my_neighbors.mask)
+        #print (self.num_owned_neighb)
+
+
+
+        #u_print = (((u_state * self.my_volumes[self.my_neighbors]).sum(axis=1)))
+        #plt.plot(u_print)
+        #plt.show()
+        #print(self.my_nodes.shape)
+
+        #print(self.my_ref_pos_state_x[0])
+        #ttt.sleep(1)
 
         upwind_indicator = np.sign(self.my_ref_pos_state_x * u[:self.num_owned_neighb,np.newaxis] +self.my_ref_pos_state_y *\
                          v[:self.num_owned_neighb,np.newaxis])
+        #upwind_indicator[self.BC_Right_fill, :] = 1.0
+
+
 
         ### equation 1, x-direction
         grad_u_x = self.gamma * self.omega * u_state * (self.my_ref_pos_state_x) * self.ref_mag_state_invert
@@ -56,17 +82,14 @@ class TwoDimDiffusion(FD):
         integ_grad_u_y = (grad_u_y * self.my_volumes[self.my_neighbors]).sum(axis=1)
         term_1_x = u[:self.num_owned_neighb] * integ_grad_u_x + v[:self.num_owned_neighb] * integ_grad_u_y
 
-        laplace_u_x = self.beta * self.omega * visc_sum * (u_state)*(self.my_ref_pos_state_x **2)*(self.ref_mag_state_invert)
+        #laplace_u_x = self.beta * self.omega * visc_sum * (u_state)*(self.my_ref_pos_state_x **2)*(self.ref_mag_state_invert)
+        laplace_u_x = self.beta * self.omega * visc_sum * (u_state+ v_state*self.my_ref_pos_state_x * self.my_ref_pos_state_y *self.ref_mag_state_invert)
         term_2_x = (laplace_u_x * self.my_volumes[self.my_neighbors]).sum(axis=1)
 
-        grad_p = self.gamma * self.omega * p_state * \
+        grad_p_x = self.gamma * self.omega * p_state * \
             (self.my_ref_pos_state_x) * self.ref_mag_state_invert
-        term_3_x = (1/rho) * (grad_p * self.my_volumes[self.my_neighbors]).sum(axis=1)
-        #print (self.pressure)
-        #print (np.amax(term_1_x))
-        #ttt.sleep(0.2)
+        term_3_x = (1/rho) * (grad_p_x * self.my_volumes[self.my_neighbors]).sum(axis=1)
         residual_eq1 = ((u[:self.num_owned_neighb] - u_n) / self.time_step) + term_3_x + term_1_x - term_2_x
-        #print ("residual 1 calculated")
 
         ### equation 2, y-direction
         grad_v_x = self.gamma * self.omega * v_state * (self.my_ref_pos_state_x) * self.ref_mag_state_invert
@@ -76,11 +99,12 @@ class TwoDimDiffusion(FD):
         grad_v_y = np.where(upwind_indicator > 0, 0.0, grad_v_y)
         integ_grad_v_y = (grad_v_y * self.my_volumes[self.my_neighbors]).sum(axis=1)
         term_1_y = u[:self.num_owned_neighb] * integ_grad_v_x + v[:self.num_owned_neighb] * integ_grad_v_y
-        laplace_v_x = self.beta * self.omega * visc_sum * (v_state)*(self.my_ref_pos_state_y **2)*(self.ref_mag_state_invert)
+        #laplace_v_x = self.beta * self.omega * visc_sum * (v_state)*(self.my_ref_pos_state_y **2)*(self.ref_mag_state_invert)
+        laplace_v_x = self.beta * self.omega * visc_sum * (v_state+ u_state*self.my_ref_pos_state_x * self.my_ref_pos_state_y *self.ref_mag_state_invert)
         term_2_y = (laplace_v_x * self.my_volumes[self.my_neighbors]).sum(axis=1)
-        grad_p = self.gamma * self.omega * p_state * \
-            (self.my_ref_pos_state_x) * self.ref_mag_state_invert
-        term_3_y = (1/rho) * (grad_p * self.my_volumes[self.my_neighbors]).sum(axis=1)
+        grad_p_y = self.gamma * self.omega * p_state * \
+            (self.my_ref_pos_state_y) * self.ref_mag_state_invert
+        term_3_y = (1/rho) * (grad_p_y * self.my_volumes[self.my_neighbors]).sum(axis=1)
         residual_eq2 = ((v[:self.num_owned_neighb] - v_n) / self.time_step) + term_3_y + term_1_y - term_2_y
         #print ("residual 2 calculated")
 
@@ -148,15 +172,17 @@ class TwoDimDiffusion(FD):
         xmin, xmax = bounds[0]
         xnodes = int((xmax - xmin) / delta[0]) + 1
 
-
         if self.rank == 0:
             fig, ax = plt.subplots()
             p = ax.contourf(nodes[0].reshape(-1,xnodes),
                             nodes[1].reshape(-1,xnodes),
                             u.reshape(-1,xnodes))
             ax.set_aspect('equal')
-            fig.colorbar(p)
+            #fig.colorbar(p)
+            colorbar = plt.colorbar(p)
+            #colorbar.set_ticks(np.arange(0,1,0.1))
             plt.savefig("graphs/"+ "x_" + str(self.current_i)+".png")
+            #plt.show()
 
         if self.rank == 0:
             fig, ax = plt.subplots()
@@ -164,7 +190,9 @@ class TwoDimDiffusion(FD):
                             nodes[1].reshape(-1,xnodes),
                             v.reshape(-1,xnodes))
             ax.set_aspect('equal')
-            fig.colorbar(p)
+            colorbar = fig.colorbar(p)
+            #colorbar = fig.colorbar(p,ticks=levels)
+
             plt.savefig("graphs/"+ "y_" + str(self.current_i)+".png")
 
 

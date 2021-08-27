@@ -1,8 +1,8 @@
 'discretization':
-    'horizon': 0.051 #For finite difference, should be >sqrt(max(delta) ** 2) & <delta
+    'horizon': 0.101 #For finite difference, should be >sqrt(max(delta) ** 2) & <delta
     'tensor product grid':
-        'bounds': [[0.0, 3.0], [0.0, 1.0]]
-        'delta': [0.05, 0.05]
+        'bounds': [[0.0, 6.0], [0.0, 2.0]]
+        'delta': [0.1, 0.1]
 'degrees of freedom': ['u','v']
 'load balance direction': 'x'
 'boundary conditions':
@@ -11,42 +11,48 @@
     #- 'type': 'dirichlet'
     #  'degrees of freedom': ['u']
     #  'region':
-    #      'box': [[2.9, 3.01], [-0.01, 1.01]]
-    #  'value': 0.25
+    #      'box': [[5.9, 6.1], [-0.1, 2.1]]
+    #  'value': 0.015
     #- 'type': 'dirichlet'
     #  'degrees of freedom': ['v']
     #  'region':
-    #      'box': [[2.9, 3.01], [-0.01, 1.01]]
+    #      'box': [[2.9, 3.01], [-0.01, 2.1]]
     #  'value': 0.0
-    ## Left
+    # Left
     - 'type': 'dirichlet'
       'degrees of freedom': 'u'
       'region':
-          'box': [[-0.01, 0.11], [-0.01, 1.01]]
+          'box': [[-0.1, 0.11], [-0.1, 2.1]]
       'value': 0.015
     - 'type': 'dirichlet'
       'degrees of freedom': ['v']
       'region':
-          'box': [[-0.01, 0.11], [-0.01, 1.01]]
+          'box': [[-0.1, 0.11], [-0.1, 2.1]]
       'value': 0.0
     ## Top
     #- 'type': 'dirichlet'
     #  'degrees of freedom': ['u']
     #  'region':
-    #      'box': [[-0.01, 3.01], [0.99, 1.1]]
-    #  'value': 0.002
+    #      'box': [[-0.1, 6.1], [1.9, 2.1]]
+    #  'value': 0.015
+    ### Top
+    #- 'type': 'dirichlet'
+    #  'degrees of freedom': ['v']
+    #  'region':
+    #      'box': [[-0.01, 6.1], [1.9, 2.1]]
+    #  'value': 0.0
     ##Bottom
     #- 'type': 'dirichlet'
     #  'degrees of freedom': ['v']
     #  'region':
-    #      'box': [[-0.01, 3.01], [-0.01, 0.01]]
-    #  'value': 0.25
+    #      'box': [[-0.01, 6.1], [-0.1, 0.1]]
+    #  'value': 0.0
     ##Bottom
     #- 'type': 'dirichlet'
     #  'degrees of freedom': ['u']
     #  'region':
-    #      'box': [[-0.01, 3.01], [-0.01, 0.01]]
-    #  'value': 0.0
+    #      'box': [[-0.01, 6.1], [-0.1, 0.1]]
+    #  'value': 0.015
     ## Box
     #- 'type': 'dirichlet'
     #  'degrees of freedom': ['u','v']
@@ -79,8 +85,8 @@
       'degrees of freedom': ['v','u']
       'region':
           'point-radius': 
-              'point' : [0.5, 0.5]
-              'radius' : 0.1
+              'point' : [1.5, 1.0]
+              'radius' : 0.2
       'value': 0.0
 'numerical':
     'solver parameters':
@@ -99,7 +105,7 @@
                 'Stepper Parameters': true
                 'Debug': true
     'number of steps': 2000000
-    'time step': 0.1
+    'time step': 0.001
 'output':
     'path': '/Applications/ParaView-5.9.1.app/Contents/MacOS/paraview'
     'scalar':
