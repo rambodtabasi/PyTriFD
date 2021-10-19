@@ -428,6 +428,8 @@ class FD(NOX.Epetra.Interface.Required,
         # Rambod
         self.solution_n = Epetra.Vector (field_balanced_map)
         self.pressure = Epetra.Vector(balanced_map)
+        self.temp_bc_pressure = Epetra.Vector(balanced_map)
+
         self.pressure_overlap= Epetra.Vector(overlap_map)
         self.num_owned_neighb = self.neighborhood_graph.NumMyRows()
         my_x_overlap = self.my_nodes_overlap[0,:]
@@ -471,7 +473,7 @@ class FD(NOX.Epetra.Interface.Required,
         gs = self.deltas[0]
         l = np.amax(self.my_x)
         """Right BC with one horizon thickness"""
-        x_min_right = np.where(self.my_x >= l-(10.0*gs+hgs))
+        x_min_right = np.where(self.my_x >= l-(3.0*gs+hgs))
         x_max_right = np.where(self.my_y <= l+hgs)
         x_min_right = np.array(x_min_right)
         x_max_right = np.array(x_max_right)
@@ -510,6 +512,16 @@ class FD(NOX.Epetra.Interface.Required,
                               range(self.problem_dimension)]))
             self.sm3.append(tuple([np.s_[:] if j != i else -3 for j in
                               range(self.problem_dimension)]))
+    def calc_right_bc(self,u_state,v_state):
+        grad_x = u_state * self.gamma * self.omega * (self.my_ref_pos_state_y) * self.ref_mag_state_invert*self.n_y
+        integ_grad_x = (grad_x * self.my_volumes[self.my_neighbors]).sum(axis=1)
+
+        grad_y = v_state * self.gamma * self.omega * (self.my_ref_pos_state_x) * self.ref_mag_state_invert
+        integ_grad_y = (grad_y * self.my_volumes[self.my_neighbors]).sum(axis=1)
+        return
+
+
+
 
 
     def computeF(self, x, F, flag):
@@ -526,6 +538,7 @@ class FD(NOX.Epetra.Interface.Required,
             self.my_field_overlap.Import(x, field_overlap_importer,
                                          Epetra.Insert)
             """ Calculate pressure based on penalty term """
+            """
             u = self.my_field_overlap[::2]
             v = self.my_field_overlap[1::2]
 
@@ -541,13 +554,22 @@ class FD(NOX.Epetra.Interface.Required,
                 v_state * (self.my_ref_pos_state_y) * self.ref_mag_state_invert
             integ_grad_p_y = (grad_p_y * self.my_volumes[self.my_neighbors]).sum(axis=1)
             self.pressure[:] = -1.0 * (integ_grad_p_x + integ_grad_p_y)
+
+            ### calculating the "Do Nothing" right BC for pressure
+            #temp_right_p = self.pressure_const * self.gamma * self.omega * u_state * self.my_ref_pos_state_x * self.ref_mag_state_invert
+            #temp_right_p_integ = -1.0 *(temp_right_p *self.my_volumes[self.my_neighbors]).sum(axis=1)
+            #self.pressure[self.BC_Right_fill] = temp_right_p_integ[self.BC_Right_fill]
+
+            #self.pressure[self.BC_Right_fill] = calc_right_bc_pressure(u_state,v_state)
             self.pressure_overlap.Import(self.pressure, self.overlap_importer,
                                  Epetra.Insert)
-            #print (self.pressure_overlap[self.num_owned_neighb:])
-            #print(integ_grad_p_x)
-            # Unsort and fill the actual residual
+            """
+            ### set Do not right BC value
+            #self.pressure[self.BC_Right_fill] = self.temp_bc_pressure[self.BC_Right_fill]
+
             self.F_fill[:num_owned] = self.residual_operator(self.my_field_overlap)
             F[:] = self.F_fill[:num_owned]
+
 
             # Apply Dirichlet BCs
             for bc_lids, bc_values in zip(self.dirichlet_bc_lids,
@@ -615,13 +637,15 @@ class FD(NOX.Epetra.Interface.Required,
     def solve(self):
 
         guess = self.my_field
-        guess[::self.nodal_dofs] = 0.015
-        #guess[2::self.nodal_dofs] = 100000
-        self.pressure_const = 1000
+        guess[::self.nodal_dofs] = 100.0
+        #self.pressure_const = 100000000.0
+        self.pressure_const = 1000000.0
 
         self.gamma = 6.0 /(np.pi *(self.horizon**2.0))
-        self.beta = 27.0 /((np.pi *(self.horizon**2.0))* self.my_ref_mag_state**2)
+        #self.beta = 27.0 /((np.pi *(self.horizon**2.0))* self.my_ref_mag_state**2)
+        self.beta = 30.0 /((np.pi *(self.horizon**2.0))* self.my_ref_mag_state**4)
         self.omega = np.ones_like(self.my_ref_mag_state) - (self.my_ref_mag_state/self.horizon)
+
 
 
         for i in range(self.number_of_steps):
@@ -629,11 +653,34 @@ class FD(NOX.Epetra.Interface.Required,
             self.current_i = i
             if self.rank == 0: print(f'Time step: {i}, time = {i*self.time_step}')
             self.solve_one_step(guess)
-            guess[:] = self.get_solution()[:]
+            if i > 5:
+                guess[:] = self.get_solution()[:]
+            else:
+                guess[::self.nodal_dofs] = 10.0
             self.time += self.time_step
             self.solution_n[:] = guess[:]
-            self.solution_n[:] = guess[:]
-            if i % 200 == 0 :
+            """ Pressure calculation """
+            u = self.my_field_overlap[::2]
+            v = self.my_field_overlap[1::2]
+
+            u_state = ma.masked_array(u[self.my_neighbors]
+                                                - u[:self.num_owned_neighb, None], mask=self.my_neighbors.mask)
+            v_state = ma.masked_array(v[self.my_neighbors] -
+                                                v[:self.num_owned_neighb, None], mask=self.my_neighbors.mask)
+            grad_p_x = self.pressure_const * self.gamma * self.omega * \
+                 u_state * (self.my_ref_pos_state_x) * self.ref_mag_state_invert
+            integ_grad_p_x = (
+                 grad_p_x * self.my_volumes[self.my_neighbors]).sum(axis=1)
+            grad_p_y = self.pressure_const * self.gamma * self.omega * \
+                v_state * (self.my_ref_pos_state_y) * self.ref_mag_state_invert
+            integ_grad_p_y = (grad_p_y * self.my_volumes[self.my_neighbors]).sum(axis=1)
+            self.pressure[:] = -1.0 * (integ_grad_p_x + integ_grad_p_y)
+            self.pressure[self.BC_Right_fill] = 0.0
+            #self.temp_bc_pressure[:] = -1.0 *(integ_grad_p_x)
+            self.pressure_overlap.Import(self.pressure, self.overlap_importer,
+                                 Epetra.Insert)
+            ### output results after a few timesteps
+            if i % 1000 == 0 :
                 self.plot_solution()
 
 
